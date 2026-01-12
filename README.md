@@ -1,13 +1,25 @@
 # RHELv10-RHCSA-LAiBS
+## Red Hat Enterprise Linux v10 - RHCSA Lab Interactive Bash Scripts
 
-A comprehensive, interactive lab environment for practicing Red Hat Certified System Administrator (RHCSA) exam objectives.
+[![GitHub](https://img.shields.io/badge/GitHub-JakdragonX%2FRHELv10--RHCSA--LAiBS-blue?logo=github)](https://github.com/JakdragonX/RHELv10-RHCSA-LAiBS)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![RHEL](https://img.shields.io/badge/RHEL-10-red?logo=redhat)](https://www.redhat.com/)
+
+A comprehensive, interactive lab environment for practicing Red Hat Certified System Administrator (RHCSA) exam objectives on RHEL 10 and compatible distributions.
+
+**Key Features:**
+- 🎯 Two learning modes: Exam-style and Interactive step-by-step
+- 📚 Organized by RHCSA exam objectives into modules
+- 📊 Automatic progress tracking across sessions
+- ✅ Comprehensive validation with detailed feedback
+- 🔧 One-command setup and installation
 
 ## Quick Start
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/RHELv10-RHCSA-LAiBS.git
-cd rhcsa-labs
+git clone https://github.com/JakdragonX/RHELv10-RHCSA-LAiBS.git
+cd RHELv10-RHCSA-LAiBS
 ```
 
 ### 2. Run Setup Script
@@ -297,12 +309,23 @@ To add new labs:
 
 [Your License Here]
 
+## Author & Repository
+
+**Repository:** [JakdragonX/RHELv10-RHCSA-LAiBS](https://github.com/JakdragonX/RHELv10-RHCSA-LAiBS)
+
+**Author:** Jaxon (JakdragonX)
+
+Built for RHCSA exam preparation on Red Hat Enterprise Linux v10 and compatible distributions.
+
 ## Acknowledgments
 
 Built for RHCSA exam preparation. Objectives based on Red Hat Certified System Administrator (EX200) exam requirements.
+
+Special thanks to the open-source community and Red Hat for providing excellent learning resources.
 
 ---
 
 **Happy Learning! 🚀**
 
-For questions, issues, or contributions, please open an issue on GitHub.
+For questions, issues, or contributions, please open an issue on GitHub at:
+https://github.com/JakdragonX/RHELv10-RHCSA-LAiBS/issues
