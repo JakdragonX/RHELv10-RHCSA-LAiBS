@@ -200,16 +200,37 @@ fix_line_endings() {
 set_permissions() {
     print_step "Setting executable permissions on shell scripts..."
     
-    local count=0
-    while IFS= read -r -d '' script; do
-        chmod +x "$script"
-        ((count++))
-    done < <(find "$SCRIPT_DIR" -type f -name "*.sh" -print0)
+    # Find all .sh files and store in array
+    mapfile -t scripts < <(find "$SCRIPT_DIR" -type f -name "*.sh" 2>/dev/null)
     
-    if [ $count -gt 0 ]; then
-        print_success "Made $count scripts executable"
-    else
+    local count=${#scripts[@]}
+    
+    if [ $count -eq 0 ]; then
         print_warning "No shell scripts found to make executable"
+        return 0
+    fi
+    
+    print_color "$CYAN" "  Found $count shell scripts to make executable..."
+    
+    local success=0
+    local failed=0
+    
+    # Make each script executable
+    for script in "${scripts[@]}"; do
+        if chmod +x "$script" 2>/dev/null; then
+            ((success++))
+        else
+            ((failed++))
+        fi
+    done
+    
+    if [ $success -gt 0 ]; then
+        print_success "Made $success scripts executable"
+        if [ $failed -gt 0 ]; then
+            print_warning "$failed scripts could not be made executable (may need elevated permissions)"
+        fi
+    else
+        print_error "Could not make any scripts executable"
     fi
 }
 
@@ -295,33 +316,48 @@ create_lab_wrappers() {
     
     local wrapper_count=0
     
-    # Find all lab scripts (numbered format like 01-*.sh)
-    while IFS= read -r -d '' lab_script; do
+    # Find all lab scripts in both root labs/ and module subdirectories
+    # Store in array to avoid pipe issues
+    mapfile -t lab_scripts < <(find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null)
+    
+    print_color "$CYAN" "  Found ${#lab_scripts[@]} lab scripts to process..."
+    
+    # Process each lab script
+    for lab_script in "${lab_scripts[@]}"; do
         local lab_basename=$(basename "$lab_script")
         
-        # Extract lab number and name (e.g., "01-user-management.sh" → "lab-01")
-        if [[ $lab_basename =~ ^([0-9]{2})-.*\.sh$ ]]; then
+        # Extract lab number from various formats:
+        # 01-name.sh → 01
+        # 03A-name.sh → 03
+        # 10B-name.sh → 10
+        if [[ $lab_basename =~ ^([0-9]{2})[A-Z]?-.*\.sh$ ]]; then
             local lab_num="${BASH_REMATCH[1]}"
             local cmd_name="rhcsa-lab-${lab_num}"
             local target_link="$BIN_DIR/$cmd_name"
             
             # Remove old symlink if exists
             if [ -L "$target_link" ]; then
-                sudo rm "$target_link"
+                sudo rm "$target_link" 2>/dev/null
             fi
             
             # Create symlink
-            sudo ln -sf "$lab_script" "$target_link"
-            ((wrapper_count++))
+            if sudo ln -sf "$lab_script" "$target_link" 2>/dev/null; then
+                ((wrapper_count++))
+            fi
         fi
-    done < <(find "$LAB_HOME/labs" -type f -name "[0-9][0-9]-*.sh" -print0 2>/dev/null)
+    done
     
     if [ $wrapper_count -gt 0 ]; then
         print_success "Created $wrapper_count lab shortcuts"
         echo ""
-        print_color "$CYAN" "  Example: Run lab 01 with 'sudo rhcsa-lab-01'"
+        print_color "$CYAN" "  Examples:"
+        print_color "$CYAN" "    • sudo rhcsa-lab-01  (run lab 01)"
+        print_color "$CYAN" "    • sudo rhcsa-lab-03  (run lab 03A or first 03x found)"
     else
         print_warning "No numbered lab scripts found in labs/ directory"
+        echo ""
+        print_color "$YELLOW" "  Labs should be named: XX-topic.sh or XXY-topic.sh"
+        print_color "$YELLOW" "  Where XX is a number (01, 02, 03...) and Y is optional letter (A, B, C...)"
     fi
 }
 
@@ -417,11 +453,14 @@ uninstall_labs() {
     done
     
     # Remove lab wrapper commands
-    while IFS= read -r -d '' lab_cmd; do
-        sudo rm "$lab_cmd"
-        print_success "Removed: $(basename "$lab_cmd")"
-        ((removed++))
-    done < <(find "$BIN_DIR" -type l -name "rhcsa-lab-[0-9][0-9]" -print0 2>/dev/null)
+    mapfile -t lab_cmds < <(find "$BIN_DIR" -type l -name "rhcsa-lab-[0-9][0-9]" 2>/dev/null)
+    for lab_cmd in "${lab_cmds[@]}"; do
+        if [ -n "$lab_cmd" ] && [ -L "$lab_cmd" ]; then
+            sudo rm "$lab_cmd" 2>/dev/null
+            print_success "Removed: $(basename "$lab_cmd")"
+            ((removed++))
+        fi
+    done
     
     if [ $removed -gt 0 ]; then
         print_success "Removed $removed command shortcuts"
