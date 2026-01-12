@@ -1,4 +1,4 @@
-# RHCSA Lab Framework
+# RHELv10-RHCSA-LAiBS
 
 A comprehensive, interactive lab environment for practicing Red Hat Certified System Administrator (RHCSA) exam objectives.
 
