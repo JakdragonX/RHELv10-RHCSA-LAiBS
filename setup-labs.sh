@@ -86,6 +86,11 @@ check_dependencies() {
         exit 1
     fi
     
+    # Check for file command (used for line ending detection)
+    if ! command -v file &>/dev/null; then
+        missing_deps+=("file")
+    fi
+    
     if [ ${#missing_deps[@]} -gt 0 ]; then
         print_warning "Missing dependencies: ${missing_deps[*]}"
         echo ""
@@ -102,11 +107,20 @@ check_dependencies() {
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             # Detect package manager
             if command -v dnf &>/dev/null; then
-                sudo dnf install -y "${missing_deps[@]}"
+                sudo dnf install -y "${missing_deps[@]}" || {
+                    print_error "Installation failed"
+                    exit 1
+                }
             elif command -v yum &>/dev/null; then
-                sudo yum install -y "${missing_deps[@]}"
+                sudo yum install -y "${missing_deps[@]}" || {
+                    print_error "Installation failed"
+                    exit 1
+                }
             elif command -v apt-get &>/dev/null; then
-                sudo apt-get update && sudo apt-get install -y "${missing_deps[@]}"
+                sudo apt-get update && sudo apt-get install -y "${missing_deps[@]}" || {
+                    print_error "Installation failed"
+                    exit 1
+                }
             else
                 print_error "Could not detect package manager"
                 print_color "$YELLOW" "Please install dependencies manually and re-run this script"
@@ -115,7 +129,15 @@ check_dependencies() {
             print_success "Dependencies installed"
         else
             print_error "Cannot proceed without required dependencies"
-            exit 1
+            echo ""
+            print_color "$YELLOW" "You can skip line ending conversion and run manually later:"
+            echo "  find ~/Labs -name '*.sh' -exec dos2unix {} +"
+            echo ""
+            read -p "Continue without dos2unix? (not recommended) (y/n) " -r
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                exit 1
+            fi
+            print_warning "Proceeding without line ending conversion"
         fi
     else
         print_success "All dependencies satisfied"
@@ -126,29 +148,51 @@ check_dependencies() {
 fix_line_endings() {
     print_step "Converting shell scripts to Unix format (LF line endings)..."
     
+    # Check if dos2unix is available
+    if ! command -v dos2unix &>/dev/null; then
+        print_warning "dos2unix not available, skipping line ending conversion"
+        print_color "$YELLOW" "  You can fix line endings manually later with:"
+        print_color "$YELLOW" "    find ~/Labs -name '*.sh' -exec dos2unix {} +"
+        return 0
+    fi
+    
     local script_count=0
     local fixed_count=0
+    local error_count=0
     
-    # Find all .sh files in the repository
-    while IFS= read -r -d '' script; do
-        ((script_count++))
-        
-        # Check if file has CRLF line endings (Windows format)
-        if file "$script" | grep -q "CRLF"; then
-            print_color "$YELLOW" "  Converting: $(basename "$script")"
-            dos2unix "$script" 2>/dev/null || {
-                print_warning "Could not convert $script (may already be in Unix format)"
-            }
-            ((fixed_count++))
-        fi
-    done < <(find "$SCRIPT_DIR" -type f -name "*.sh" -print0)
+    # Find all .sh files and store in array to avoid pipe issues
+    mapfile -t scripts < <(find "$SCRIPT_DIR" -type f -name "*.sh" 2>/dev/null)
+    
+    script_count=${#scripts[@]}
     
     if [ $script_count -eq 0 ]; then
         print_warning "No shell scripts found in $SCRIPT_DIR"
-    elif [ $fixed_count -eq 0 ]; then
+        return 0
+    fi
+    
+    print_color "$CYAN" "  Found $script_count shell scripts to check..."
+    
+    # Process each script
+    for script in "${scripts[@]}"; do
+        # Check if file has CRLF line endings (Windows format)
+        # Use a timeout to prevent hanging
+        if timeout 2s file "$script" 2>/dev/null | grep -q "CRLF" 2>/dev/null; then
+            # Try to convert with timeout
+            if timeout 5s dos2unix "$script" 2>/dev/null; then
+                ((fixed_count++))
+            else
+                ((error_count++))
+            fi
+        fi
+    done
+    
+    if [ $fixed_count -eq 0 ]; then
         print_success "All $script_count scripts already have Unix line endings"
     else
-        print_success "Fixed $fixed_count of $script_count scripts"
+        print_success "Converted $fixed_count of $script_count scripts"
+        if [ $error_count -gt 0 ]; then
+            print_warning "$error_count scripts encountered errors during conversion"
+        fi
     fi
 }
 
