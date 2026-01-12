@@ -12,7 +12,7 @@ readonly CYAN='\033[0;36m'
 readonly NC='\033[0m'
 readonly BOLD='\033[1m'
 
-print_color() {
+print_color() {A
     local color=$1
     shift
     echo -e "${color}$*${NC}"
