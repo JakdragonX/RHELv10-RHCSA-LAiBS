@@ -6,7 +6,7 @@ A comprehensive, interactive lab environment for practicing Red Hat Certified Sy
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/rhcsa-labs.git
+git clone https://github.com/yourusername/RHELv10-RHCSA-LAiBS.git
 cd rhcsa-labs
 ```
 
