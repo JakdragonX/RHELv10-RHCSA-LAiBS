@@ -276,12 +276,12 @@ install_commands() {
     
     echo "DEBUG: [install_commands] Starting installation" >&2
     
-    # Install rhcsa-progress command
+    # Install rhcsa-progress command with wrapper
     local source_file="$LAB_HOME/track-progress.sh"
-    local target_link="$BIN_DIR/rhcsa-progress"
+    local target_script="$BIN_DIR/rhcsa-progress"
     
     echo "DEBUG: [install_commands] source=$source_file" >&2
-    echo "DEBUG: [install_commands] target=$target_link" >&2
+    echo "DEBUG: [install_commands] target=$target_script" >&2
     
     if [ ! -f "$source_file" ]; then
         print_error "Script not found: $source_file"
@@ -290,18 +290,30 @@ install_commands() {
     
     echo "DEBUG: [install_commands] Source file exists" >&2
     
-    # Remove old symlink if exists
-    sudo rm -f "$target_link" 2>/dev/null || true
+    # Create wrapper script that changes to LAB_HOME first
+    local wrapper_temp=$(mktemp)
+    cat > "$wrapper_temp" << WRAPPER_EOF
+#!/bin/bash
+# Wrapper for track-progress.sh
+cd "$LAB_HOME" || exit 1
+exec "./track-progress.sh" "\$@"
+WRAPPER_EOF
     
-    echo "DEBUG: [install_commands] About to create symlink" >&2
+    # Make temp file executable
+    chmod +x "$wrapper_temp"
     
-    # Create new symlink
-    sudo ln -sf "$source_file" "$target_link" || {
-        print_error "Failed to create symlink"
+    echo "DEBUG: [install_commands] About to copy wrapper" >&2
+    
+    # Copy to target location with sudo
+    sudo cp "$wrapper_temp" "$target_script" || {
+        print_error "Failed to create command"
+        rm -f "$wrapper_temp"
         return 1
     }
     
-    echo "DEBUG: [install_commands] Symlink created successfully" >&2
+    rm -f "$wrapper_temp"
+    
+    echo "DEBUG: [install_commands] Wrapper created successfully" >&2
     
     print_success "Installed: rhcsa-progress → track-progress.sh"
     
