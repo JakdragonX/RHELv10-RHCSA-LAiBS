@@ -261,6 +261,13 @@ setup_lab_directory() {
     # Create a .lab-framework file to identify this as a lab directory
     echo "RHCSA Lab Framework" > "$LAB_HOME/.lab-framework"
     echo "Installed: $(date)" >> "$LAB_HOME/.lab-framework"
+    
+    # Create a symlink to lab-runner.sh in the labs directory
+    # This allows lab scripts in subdirectories (labs/m02/) to find it with ../lab-runner.sh
+    if [ -f "$LAB_HOME/lab-runner.sh" ] && [ -d "$LAB_HOME/labs" ]; then
+        ln -sf "$LAB_HOME/lab-runner.sh" "$LAB_HOME/labs/lab-runner.sh" 2>/dev/null
+        print_success "Created lab-runner.sh symlink in labs directory"
+    fi
 }
 
 # Install command-line shortcuts
@@ -353,10 +360,12 @@ create_lab_wrappers() {
             
             # Create a temporary wrapper script
             local wrapper_temp=$(mktemp)
+            local lab_dir=$(dirname "$lab_file")
             cat > "$wrapper_temp" << WRAPPER_EOF
 #!/bin/bash
 # Wrapper for ${lab_basename}
-exec "${lab_file}" "\$@"
+cd "${lab_dir}" || exit 1
+exec "./${lab_basename}" "\$@"
 WRAPPER_EOF
             
             # Make temp file executable first
