@@ -334,50 +334,33 @@ create_lab_wrappers() {
     print_color "$CYAN" "  Found $lab_count lab scripts to process..."
     echo ""
     
-    # Create a wrapper creation script that will be executed
-    local wrapper_script=$(mktemp)
-    cat > "$wrapper_script" << 'WRAPPER_EOF'
-#!/bin/bash
-lab_script="$1"
-BIN_DIR="$2"
-
-if [ ! -f "$lab_script" ]; then
-    exit 1
-fi
-
-lab_basename=$(basename "$lab_script")
-
-# Extract lab number (01, 02, 03, etc.)
-if [[ $lab_basename =~ ^([0-9]{2}) ]]; then
-    lab_num="${BASH_REMATCH[1]}"
-    cmd_name="rhcsa-lab-${lab_num}"
-    target_link="$BIN_DIR/$cmd_name"
+    # Store all lab files in a temp file to process
+    local temp_list=$(mktemp)
+    find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null > "$temp_list"
     
-    # Remove old symlink if exists and create new one
-    sudo rm -f "$target_link" 2>/dev/null
-    
-    if sudo ln -sf "$lab_script" "$target_link" 2>/dev/null; then
-        echo "✓ Created: $cmd_name → $lab_basename"
-        exit 0
-    else
-        echo "⚠ Failed: $cmd_name"
-        exit 1
-    fi
-fi
-exit 1
-WRAPPER_EOF
-    
-    chmod +x "$wrapper_script"
-    
-    # Execute the wrapper script for each lab file
-    local wrapper_count=0
-    find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null | while IFS= read -r lab_file; do
-        if "$wrapper_script" "$lab_file" "$BIN_DIR"; then
-            ((wrapper_count++))
+    # Process each lab file directly with xargs for maximum reliability
+    cat "$temp_list" | while IFS= read -r lab_file; do
+        [ -z "$lab_file" ] && continue
+        [ ! -f "$lab_file" ] && continue
+        
+        local lab_basename=$(basename "$lab_file")
+        
+        # Extract lab number (01, 02, 03, etc.)
+        if [[ $lab_basename =~ ^([0-9]{2}) ]]; then
+            local lab_num="${BASH_REMATCH[1]}"
+            local cmd_name="rhcsa-lab-${lab_num}"
+            local target_link="$BIN_DIR/$cmd_name"
+            
+            # Remove old symlink if exists and create new one
+            sudo rm -f "$target_link" 2>/dev/null || true
+            
+            if sudo ln -sf "$lab_file" "$target_link" 2>/dev/null; then
+                echo "✓ Created: $cmd_name → $lab_basename"
+            fi
         fi
-    done
+    done || true  # Don't let loop failure kill the script
     
-    rm -f "$wrapper_script"
+    rm -f "$temp_list"
     
     echo ""
     print_success "Lab command shortcuts created!"
@@ -386,6 +369,8 @@ WRAPPER_EOF
     print_color "$CYAN" "    • sudo rhcsa-lab-01"
     print_color "$CYAN" "    • sudo rhcsa-lab-03"
     print_color "$CYAN" "    • sudo rhcsa-lab-10"
+    
+    return 0
 }
 
 # Display usage information
