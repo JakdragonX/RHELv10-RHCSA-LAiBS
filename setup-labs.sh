@@ -277,8 +277,6 @@ create_lab_wrappers() {
         return 0
     fi
     
-    local wrapper_count=0
-    
     # Count lab scripts
     local lab_count=$(find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null | wc -l)
     
@@ -292,33 +290,36 @@ create_lab_wrappers() {
     
     print_color "$CYAN" "  Found $lab_count lab scripts to process..."
     
-    # Process lab scripts using a subshell to avoid hangs
-    (
-        find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null | while IFS= read -r lab_script; do
-            if [ -f "$lab_script" ]; then
-                local lab_basename=$(basename "$lab_script")
-                
-                # Extract lab number from various formats:
-                # 01-name.sh → 01
-                # 03A-name.sh → 03
-                # 10B-name.sh → 10
-                if [[ $lab_basename =~ ^([0-9]{2})[A-Z]?-.*\.sh$ ]]; then
-                    local lab_num="${BASH_REMATCH[1]}"
-                    local cmd_name="rhcsa-lab-${lab_num}"
-                    local target_link="$BIN_DIR/$cmd_name"
-                    
-                    # Remove old symlink if exists
-                    [ -L "$target_link" ] && sudo rm "$target_link" 2>/dev/null
-                    
-                    # Create symlink
-                    sudo ln -sf "$lab_script" "$target_link" 2>/dev/null && echo "1"
-                fi
-            fi
-        done
-    ) | wc -l > /tmp/wrapper_count_$$
+    # Use a simple approach: create wrapper script for each found lab
+    local wrapper_count=0
+    local temp_list=$(mktemp)
     
-    wrapper_count=$(cat /tmp/wrapper_count_$$ 2>/dev/null || echo "0")
-    rm -f /tmp/wrapper_count_$$
+    # Get list of all lab files
+    find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null > "$temp_list"
+    
+    # Process each file
+    while IFS= read -r lab_script; do
+        [ -z "$lab_script" ] && continue
+        [ ! -f "$lab_script" ] && continue
+        
+        local lab_basename=$(basename "$lab_script")
+        
+        # Extract lab number (01, 02, 03, etc.)
+        if [[ $lab_basename =~ ^([0-9]{2}) ]]; then
+            local lab_num="${BASH_REMATCH[1]}"
+            local cmd_name="rhcsa-lab-${lab_num}"
+            local target_link="$BIN_DIR/$cmd_name"
+            
+            # Remove old symlink if exists and create new one
+            sudo rm -f "$target_link" 2>/dev/null
+            
+            if sudo ln -sf "$lab_script" "$target_link" 2>/dev/null; then
+                ((wrapper_count++))
+            fi
+        fi
+    done < "$temp_list"
+    
+    rm -f "$temp_list"
     
     if [ "$wrapper_count" -gt 0 ]; then
         print_success "Created $wrapper_count lab shortcuts"
