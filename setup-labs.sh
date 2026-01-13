@@ -229,8 +229,9 @@ install_commands() {
     print_step "Installing lab commands to system PATH..."
     
     # Core scripts to install as commands
+    # Note: lab-runner.sh is NOT included here as it's a framework file, not a standalone command
+    # Individual lab shortcuts are created by create_lab_wrappers()
     declare -A commands=(
-        ["lab-runner.sh"]="rhcsa-lab"
         ["track-progress.sh"]="rhcsa-progress"
     )
     
@@ -261,10 +262,12 @@ install_commands() {
     fi
     
     echo ""
-    print_color "$GREEN" "  You can now use these commands from anywhere:"
+    print_color "$GREEN" "  Core command installed:"
     for cmd_name in "${commands[@]}"; do
         print_color "$CYAN" "    • $cmd_name"
     done
+    echo ""
+    print_color "$YELLOW" "  Lab-specific commands (rhcsa-lab-XX) will be created in next step..."
 }
 
 # Create helper wrapper scripts for individual labs
@@ -315,18 +318,23 @@ create_lab_wrappers() {
             
             if sudo ln -sf "$lab_script" "$target_link" 2>/dev/null; then
                 ((wrapper_count++))
+                print_color "$GREEN" "  ✓ Created: $cmd_name → $(basename "$lab_script")"
+            else
+                print_color "$YELLOW" "  ⚠ Failed to create: $cmd_name"
             fi
         fi
     done < "$temp_list"
     
     rm -f "$temp_list"
     
+    echo ""
     if [ "$wrapper_count" -gt 0 ]; then
         print_success "Created $wrapper_count lab shortcuts"
         echo ""
-        print_color "$CYAN" "  Examples:"
-        print_color "$CYAN" "    • sudo rhcsa-lab-01  (run lab 01)"
-        print_color "$CYAN" "    • sudo rhcsa-lab-03  (run lab 03A or first 03x found)"
+        print_color "$CYAN" "  You can now run labs with commands like:"
+        print_color "$CYAN" "    • sudo rhcsa-lab-01"
+        print_color "$CYAN" "    • sudo rhcsa-lab-03"
+        print_color "$CYAN" "    • sudo rhcsa-lab-10"
     else
         print_warning "Could not create lab shortcuts (may need sudo access)"
     fi
@@ -430,15 +438,13 @@ uninstall_labs() {
     
     print_step "Removing command shortcuts..."
     
-    # Remove core commands
+    # Remove core command (just rhcsa-progress, not rhcsa-lab which doesn't exist)
     local removed=0
-    for cmd in rhcsa-lab rhcsa-progress; do
-        if [ -L "$BIN_DIR/$cmd" ]; then
-            sudo rm "$BIN_DIR/$cmd"
-            print_success "Removed: $cmd"
-            ((removed++))
-        fi
-    done
+    if [ -L "$BIN_DIR/rhcsa-progress" ]; then
+        sudo rm "$BIN_DIR/rhcsa-progress"
+        print_success "Removed: rhcsa-progress"
+        ((removed++))
+    fi
     
     # Remove lab wrapper commands using temp file
     local temp_file=$(mktemp)
