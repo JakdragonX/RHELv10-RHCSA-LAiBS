@@ -160,31 +160,37 @@ fix_line_endings() {
     local fixed_count=0
     local error_count=0
     
-    # Find all .sh files and store in array to avoid pipe issues
-    mapfile -t scripts < <(find "$SCRIPT_DIR" -type f -name "*.sh" 2>/dev/null)
+    # Use temporary file to store script list
+    local temp_file=$(mktemp)
+    find "$SCRIPT_DIR" -type f -name "*.sh" 2>/dev/null > "$temp_file"
     
-    script_count=${#scripts[@]}
+    script_count=$(wc -l < "$temp_file")
     
     if [ $script_count -eq 0 ]; then
         print_warning "No shell scripts found in $SCRIPT_DIR"
+        rm -f "$temp_file"
         return 0
     fi
     
     print_color "$CYAN" "  Found $script_count shell scripts to check..."
     
     # Process each script
-    for script in "${scripts[@]}"; do
-        # Check if file has CRLF line endings (Windows format)
-        # Use a timeout to prevent hanging
-        if timeout 2s file "$script" 2>/dev/null | grep -q "CRLF" 2>/dev/null; then
-            # Try to convert with timeout
-            if timeout 5s dos2unix "$script" 2>/dev/null; then
-                ((fixed_count++))
-            else
-                ((error_count++))
+    while IFS= read -r script; do
+        if [ -f "$script" ]; then
+            # Check if file has CRLF line endings (Windows format)
+            # Use a timeout to prevent hanging
+            if timeout 2s file "$script" 2>/dev/null | grep -q "CRLF" 2>/dev/null; then
+                # Try to convert with timeout
+                if timeout 5s dos2unix "$script" 2>/dev/null; then
+                    ((fixed_count++))
+                else
+                    ((error_count++))
+                fi
             fi
         fi
-    done
+    done < "$temp_file"
+    
+    rm -f "$temp_file"
     
     if [ $fixed_count -eq 0 ]; then
         print_success "All $script_count scripts already have Unix line endings"
@@ -200,13 +206,15 @@ fix_line_endings() {
 set_permissions() {
     print_step "Setting executable permissions on shell scripts..."
     
-    # Find all .sh files and store in array
-    mapfile -t scripts < <(find "$SCRIPT_DIR" -type f -name "*.sh" 2>/dev/null)
+    # Use a temporary file to avoid process substitution issues
+    local temp_file=$(mktemp)
+    find "$SCRIPT_DIR" -type f -name "*.sh" 2>/dev/null > "$temp_file"
     
-    local count=${#scripts[@]}
+    local count=$(wc -l < "$temp_file")
     
-    if [ $count -eq 0 ]; then
+    if [ "$count" -eq 0 ]; then
         print_warning "No shell scripts found to make executable"
+        rm -f "$temp_file"
         return 0
     fi
     
@@ -216,18 +224,27 @@ set_permissions() {
     local failed=0
     
     # Make each script executable
-    for script in "${scripts[@]}"; do
-        if chmod +x "$script" 2>/dev/null; then
-            ((success++))
-        else
-            ((failed++))
+    while IFS= read -r script; do
+        if [ -f "$script" ]; then
+            if chmod +x "$script" 2>/dev/null; then
+                ((success++))
+            else
+                ((failed++))
+            fi
         fi
-    done
+    done < "$temp_file"
+    
+    rm -f "$temp_file"
     
     if [ $success -gt 0 ]; then
         print_success "Made $success scripts executable"
         if [ $failed -gt 0 ]; then
-            print_warning "$failed scripts could not be made executable (may need elevated permissions)"
+            print_warning "$failed scripts could not be made executable"
+        fi
+    else
+        print_error "Failed to set executable permissions"
+    fi
+}
         fi
     else
         print_error "Could not make any scripts executable"
@@ -317,35 +334,41 @@ create_lab_wrappers() {
     local wrapper_count=0
     
     # Find all lab scripts in both root labs/ and module subdirectories
-    # Store in array to avoid pipe issues
-    mapfile -t lab_scripts < <(find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null)
+    # Use temporary file to avoid process substitution issues
+    local temp_file=$(mktemp)
+    find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null > "$temp_file"
     
-    print_color "$CYAN" "  Found ${#lab_scripts[@]} lab scripts to process..."
+    local lab_count=$(wc -l < "$temp_file")
+    print_color "$CYAN" "  Found $lab_count lab scripts to process..."
     
     # Process each lab script
-    for lab_script in "${lab_scripts[@]}"; do
-        local lab_basename=$(basename "$lab_script")
-        
-        # Extract lab number from various formats:
-        # 01-name.sh → 01
-        # 03A-name.sh → 03
-        # 10B-name.sh → 10
-        if [[ $lab_basename =~ ^([0-9]{2})[A-Z]?-.*\.sh$ ]]; then
-            local lab_num="${BASH_REMATCH[1]}"
-            local cmd_name="rhcsa-lab-${lab_num}"
-            local target_link="$BIN_DIR/$cmd_name"
+    while IFS= read -r lab_script; do
+        if [ -f "$lab_script" ]; then
+            local lab_basename=$(basename "$lab_script")
             
-            # Remove old symlink if exists
-            if [ -L "$target_link" ]; then
-                sudo rm "$target_link" 2>/dev/null
-            fi
-            
-            # Create symlink
-            if sudo ln -sf "$lab_script" "$target_link" 2>/dev/null; then
-                ((wrapper_count++))
+            # Extract lab number from various formats:
+            # 01-name.sh → 01
+            # 03A-name.sh → 03
+            # 10B-name.sh → 10
+            if [[ $lab_basename =~ ^([0-9]{2})[A-Z]?-.*\.sh$ ]]; then
+                local lab_num="${BASH_REMATCH[1]}"
+                local cmd_name="rhcsa-lab-${lab_num}"
+                local target_link="$BIN_DIR/$cmd_name"
+                
+                # Remove old symlink if exists
+                if [ -L "$target_link" ]; then
+                    sudo rm "$target_link" 2>/dev/null
+                fi
+                
+                # Create symlink
+                if sudo ln -sf "$lab_script" "$target_link" 2>/dev/null; then
+                    ((wrapper_count++))
+                fi
             fi
         fi
-    done
+    done < "$temp_file"
+    
+    rm -f "$temp_file"
     
     if [ $wrapper_count -gt 0 ]; then
         print_success "Created $wrapper_count lab shortcuts"
