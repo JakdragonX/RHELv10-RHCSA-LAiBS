@@ -338,28 +338,31 @@ create_lab_wrappers() {
     local temp_list=$(mktemp)
     find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null > "$temp_list"
     
-    # Process each lab file - create wrapper script instead of symlink
+    # Process each lab file - create wrapper script
     cat "$temp_list" | while IFS= read -r lab_file; do
         [ -z "$lab_file" ] && continue
         [ ! -f "$lab_file" ] && continue
         
         local lab_basename=$(basename "$lab_file")
         
-        # Extract lab number (01, 02, 03, etc.)
-        if [[ $lab_basename =~ ^([0-9]{2}) ]]; then
-            local lab_num="${BASH_REMATCH[1]}"
-            local cmd_name="rhcsa-lab-${lab_num}"
+        # Extract FULL lab identifier including letter suffix (01, 03A, 03B, etc.)
+        if [[ $lab_basename =~ ^([0-9]{2}[A-Z]?)-.*\.sh$ ]]; then
+            local lab_id="${BASH_REMATCH[1]}"
+            local cmd_name="rhcsa-lab-${lab_id}"
             local target_script="$BIN_DIR/$cmd_name"
             
-            # Create a wrapper script that calls the actual lab
-            sudo tee "$target_script" > /dev/null << EOF
+            # Create a temporary wrapper script
+            local wrapper_temp=$(mktemp)
+            cat > "$wrapper_temp" << WRAPPER_EOF
 #!/bin/bash
-# Wrapper script for $lab_basename
-exec "$lab_file" "\$@"
-EOF
+# Wrapper for ${lab_basename}
+exec "${lab_file}" "\$@"
+WRAPPER_EOF
             
-            # Make it executable
-            sudo chmod +x "$target_script" 2>/dev/null
+            # Copy to target location with sudo and make executable
+            sudo cp "$wrapper_temp" "$target_script"
+            sudo chmod +x "$target_script"
+            rm -f "$wrapper_temp"
             
             echo "✓ Created: $cmd_name → $lab_basename"
         fi
@@ -371,9 +374,12 @@ EOF
     print_success "Lab command shortcuts created!"
     echo ""
     print_color "$CYAN" "  You can now run labs with commands like:"
-    print_color "$CYAN" "    • sudo rhcsa-lab-01"
-    print_color "$CYAN" "    • sudo rhcsa-lab-03"
-    print_color "$CYAN" "    • sudo rhcsa-lab-10"
+    print_color "$CYAN" "    • sudo rhcsa-lab-01  (if it exists)"
+    print_color "$CYAN" "    • sudo rhcsa-lab-03A (for lab 03 part A)"
+    print_color "$CYAN" "    • sudo rhcsa-lab-03B (for lab 03 part B)"
+    print_color "$CYAN" "    • sudo rhcsa-lab-04A"
+    echo ""
+    print_color "$YELLOW" "  Note: Labs with letter suffixes (A, B, C) have separate commands"
     
     return 0
 }
