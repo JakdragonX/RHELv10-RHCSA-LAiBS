@@ -2,7 +2,7 @@
 # labs/04B-advanced-documentation.sh
 # Lab: Advanced Man Page Searching and Info Documentation
 # Difficulty: Intermediate
-# RHCSA Objective: Locate, read, and use system documentation including man, info, and files in /usr/share/doc
+# RHCSA Objective: Locate, read, and use system documentation
 
 # Source the lab framework
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,16 +14,13 @@ LAB_DIFFICULTY="Intermediate"
 LAB_TIME_ESTIMATE="25-30 minutes"
 
 #############################################################################
-# SETUP: Idempotent environment preparation
+# SETUP
 #############################################################################
 setup_lab() {
     echo "Preparing lab environment..."
     
     # Ensure man database is current
     mandb 2>/dev/null || true
-    
-    # Install info and pinfo if not present
-    dnf install -y info pinfo 2>/dev/null || true
     
     # Create test user
     userdel -r researcher 2>/dev/null || true
@@ -32,216 +29,98 @@ setup_lab() {
     
     # Create working directory
     rm -rf /opt/advanced_docs 2>/dev/null || true
-    mkdir -p /opt/advanced_docs/{research,reference,examples} 2>/dev/null || true
+    mkdir -p /opt/advanced_docs/{research,reference} 2>/dev/null || true
     chown -R researcher:researcher /opt/advanced_docs 2>/dev/null || true
     
     echo "  ✓ Man database updated"
-    echo "  ✓ Info documentation tools installed"
     echo "  ✓ Test user 'researcher' created"
-    echo "  ✓ Working directory created at /opt/advanced_docs"
-    echo "  ✓ System ready for fresh lab start"
+    echo "  ✓ Working directory created"
 }
 
 #############################################################################
-# PREREQUISITES: Knowledge and commands needed
+# PREREQUISITES
 #############################################################################
 prerequisites() {
     cat << 'EOF'
-Knowledge Requirements:
-  • Completion of Lab 04A (basic man page navigation)
-  • Understanding of regular expressions (basic level)
-  • Familiarity with piping and output redirection
-  • Understanding of GNU vs non-GNU software
-
 Commands You'll Use:
-  • apropos            - Search man page descriptions (= man -k)
-  • apropos -a         - Search with AND logic (multiple keywords)
+  • apropos -a         - Search with AND logic
   • apropos -e         - Exact match search
-  • man -K             - Search WITHIN man page content (very powerful)
-  • man -w             - Show location of man page file
-  • man --regex        - Search using regular expressions
+  • man -K             - Search within man page content
+  • man -w             - Show man page file location
   • info               - Read GNU Info documentation
-  • pinfo              - Better info reader (if available)
-  • /usr/share/doc/    - Package documentation directory
-
-Advanced Search Patterns:
-  • apropos '^word'    - Starts with word
-  • apropos 'word$'    - Ends with word  
-  • apropos 'word.*'   - Contains word followed by anything
-  • man -K 'pattern'   - Search all man page CONTENT
+  • /usr/share/doc/    - Package documentation
 
 Info Navigation:
-  • Space              - Next screen
-  • Backspace/Delete   - Previous screen
-  • n                  - Next node
-  • p                  - Previous node
-  • u                  - Up to parent node
-  • l                  - Last visited node
-  • Tab                - Next hyperlink
-  • Enter              - Follow hyperlink
-  • q                  - Quit info
-
-Files You'll Explore:
-  • /usr/share/man/             - Man page source files
-  • /usr/share/info/            - Info page files
-  • /usr/share/doc/             - Package documentation
-  • /usr/share/doc/*/README     - Package readme files
-  • /usr/share/doc/*/examples/  - Example configurations
+  • Space    - Next screen
+  • n        - Next node
+  • p        - Previous node
+  • u        - Up level
+  • q        - Quit
 EOF
 }
 
 #############################################################################
-# SCENARIO: The lab story and objectives (Standard Mode)
+# SCENARIO
 #############################################################################
 scenario() {
     cat << 'EOF'
 SCENARIO:
-You're working on a complex RHEL 10 deployment that requires configuring
-services you've never used before. The senior administrator is on vacation,
-and you need to figure out configuration syntax, examples, and best practices
-entirely from system documentation. Internet access is unavailable due to
-security policies.
-
-BACKGROUND:
-Many tasks on the RHCSA exam require finding information that isn't in basic
-man page summaries. You need to master advanced search techniques: searching
-within man page content, using regular expressions, combining search criteria,
-and finding examples in /usr/share/doc. Info pages provide more detailed
-documentation for GNU software than man pages.
+You need to configure services without internet access. Master advanced
+documentation search to find information from system docs alone.
 
 OBJECTIVES:
-  1. Master AND logic with apropos for multi-keyword searches:
-     • Find commands that deal with BOTH "network" AND "interface"
-     • Use apropos -a (AND logic) instead of single keyword
-     • Filter results by section
-     • Compare results: apropos 'network' vs apropos -a network interface
-     • Save findings to /opt/advanced_docs/research/network_interface_tools.txt
-     • Document at least 3 commands found
+  1. Use apropos -a for AND logic searches
+  2. Use apropos -e for exact matches
+  3. Use man -K to search within man pages
+  4. Find man page file locations
+  5. Navigate info pages
+  6. Explore /usr/share/doc
 
-  2. Use exact match searching to find specific commands:
-     • Use apropos -e to find exact command name matches
-     • Search for exact matches: apropos -e '^user'
-     • Compare with: apropos user (shows partial matches)
-     • Find commands that start with "user" (useradd, userdel, usermod, etc.)
-     • Save to /opt/advanced_docs/research/user_commands_exact.txt
-
-  3. Search WITHIN man page content using man -K (capital K):
-     • Use man -K to search actual man page text (not just descriptions)
-     • Search for: man -K "force unmount"
-     • This searches ALL man pages for pages containing these words
-     • Document which man pages contain "force unmount"
-     • Save to /opt/advanced_docs/research/force_unmount_pages.txt
-     • Warning: This is slow but very powerful when you don't know the command
-
-  4. Find man page file locations:
-     • Use man -w to find where man page files are stored
-     • Find locations for: ls, systemctl, passwd
-     • Use man -wa passwd to see ALL section locations
-     • Understand .gz compression of man pages
-     • Save locations to /opt/advanced_docs/research/manpage_locations.txt
-
-  5. Explore GNU Info documentation (alternative to man):
-     • Open info page for 'coreutils' (core utilities documentation)
-     • Navigate using: n (next), p (previous), u (up), Tab (next link)
-     • Find the section on 'ls' command within coreutils
-     • Compare info ls vs man ls (info usually more detailed for GNU tools)
-     • Document the difference in /opt/advanced_docs/research/info_vs_man.txt
-
-  6. Discover package documentation in /usr/share/doc:
-     • List contents of /usr/share/doc/
-     • Pick a package (e.g., bash, systemd, openssh)
-     • Explore: README, CHANGES, examples/ subdirectory
-     • Find example configuration files
-     • Save interesting findings to /opt/advanced_docs/reference/
-     • Document: Package name, useful files found, examples available
-
-HINTS:
-  • apropos -a uses AND logic: apropos -a keyword1 keyword2
-  • man -K is SLOW - searches every man page on system
-  • Use Ctrl+C to skip through man -K results you don't want
-  • Info pages use different navigation than man pages
-  • /usr/share/doc often has examples not in man pages
-  • Many packages include example configs in /usr/share/doc/package/examples/
-
-SUCCESS CRITERIA:
-  • Can use apropos -a for multi-keyword searches
-  • Can use apropos -e for exact matches
-  • Understand when to use man -K (desperate search)
-  • Can find man page source file locations
-  • Can navigate info pages effectively
-  • Can explore /usr/share/doc for additional documentation
-  • All research documented in /opt/advanced_docs/
+All findings saved to /opt/advanced_docs/
 EOF
 }
 
-#############################################################################
-# QUICK OBJECTIVES: Condensed checklist
-#############################################################################
 objectives_quick() {
     cat << 'EOF'
-  ☐ 1. Use apropos -a for AND logic (network interface search)
-  ☐ 2. Use apropos -e for exact matches (commands starting with "user")
-  ☐ 3. Use man -K to search within all man page content
-  ☐ 4. Find man page file locations with man -w
-  ☐ 5. Navigate info pages for GNU utilities (coreutils)
-  ☐ 6. Explore /usr/share/doc for package documentation
+  ☐ 1. apropos -a for AND searches
+  ☐ 2. apropos -e for exact matches
+  ☐ 3. man -K for content search
+  ☐ 4. man -w for file locations
+  ☐ 5. Navigate info pages
+  ☐ 6. Explore /usr/share/doc
 EOF
 }
 
 #############################################################################
-# INTERACTIVE MODE SUPPORT
+# INTERACTIVE MODE
 #############################################################################
-get_step_count() {
-    echo "6"
-}
+get_step_count() { echo "6"; }
 
 scenario_context() {
-    cat << 'EOF'
-You need to configure unfamiliar services with no internet access and no
-senior admin available. Master advanced documentation search techniques to
-find the information you need from system documentation alone.
-EOF
+    echo "Master advanced documentation search techniques."
 }
 
 # STEP 1
 show_step_1() {
     cat << 'EOF'
-TASK: Master AND logic with apropos
+TASK: Use AND logic with apropos
 
-Often you need to find commands that relate to MULTIPLE concepts, not just one.
-The apropos -a flag uses AND logic to combine search terms.
+Find commands dealing with BOTH "network" AND "interface".
 
 Requirements:
-  • Search for commands related to "network" only: apropos network
-  • Search for commands related to both "network" AND "interface": apropos -a network interface
-  • Compare the number of results
-  • Filter results by section: | grep '(8)'
-  • Identify at least 3 useful commands
-  • Save to: /opt/advanced_docs/research/network_interface_tools.txt
+  • Compare: apropos network (broad)
+  • With: apropos -a network interface (focused)
+  • Save findings to: /opt/advanced_docs/research/network_tools.txt
 
-Commands you might need:
-  • apropos network                    - Single keyword
-  • apropos -a network interface       - AND logic (both keywords)
-  • apropos -a network interface | wc -l   - Count results
-  • apropos network | grep interface   - Alternative (less precise)
+Example:
+  apropos network | wc -l          # Many results
+  apropos -a network interface | wc -l  # Fewer, focused results
 EOF
 }
 
 validate_step_1() {
-    local findings_file="/opt/advanced_docs/research/network_interface_tools.txt"
-    
-    if [ ! -f "$findings_file" ]; then
-        print_color "$RED" "✗ Research file not found: $findings_file"
-        return 1
-    fi
-    
-    if [ $(wc -l < "$findings_file") -lt 5 ]; then
-        print_color "$YELLOW" "⚠ Research file seems incomplete"
-        return 1
-    fi
-    
-    print_color "$GREEN" "  ✓ Network interface tools documented"
-    return 0
+    [ -f "/opt/advanced_docs/research/network_tools.txt" ] && \
+    [ $(wc -l < "/opt/advanced_docs/research/network_tools.txt") -ge 5 ]
 }
 
 solution_step_1() {
@@ -249,290 +128,227 @@ solution_step_1() {
 
 SOLUTION:
 ─────────
-Commands:
-  # Single keyword search
-  apropos network | wc -l
-  # Might return: 150+ results
-  
-  # AND logic search
-  apropos -a network interface | wc -l
-  # Might return: 10-20 results (much more focused)
-  
-  # View the results
-  apropos -a network interface
-  
-  # Filter to admin commands only
-  apropos -a network interface | grep '(8)'
-  
-  # Save research
-  mkdir -p /opt/advanced_docs/research
-  cat > /opt/advanced_docs/research/network_interface_tools.txt << 'EOF_DOC'
-NETWORK INTERFACE TOOLS RESEARCH
-=================================
+# Compare searches
+apropos network | wc -l
+# Shows 100+ results
 
-Search Command:
-  apropos -a network interface
+apropos -a network interface | wc -l
+# Shows 10-20 focused results
 
-Comparison:
-  apropos network           → ~150 results (too broad)
-  apropos -a network interface → ~15 results (focused)
+# View results
+apropos -a network interface
 
-WHY AND LOGIC MATTERS:
-  Single keyword "network" returns anything networking-related:
-    - Network filesystems (NFS)
-    - Network printing
-    - Network protocols
-    - Network interfaces
-    - Network diagnostics
-    - ... and much more
-  
-  Two keywords "network AND interface" returns only commands that
-  mention BOTH terms in their description - much more relevant!
+# Save findings
+mkdir -p /opt/advanced_docs/research
+apropos -a network interface > /opt/advanced_docs/research/network_tools.txt
 
-COMMANDS FOUND (Admin Tools Section 8):
-----------------------------------------
+# Add notes
+cat >> /opt/advanced_docs/research/network_tools.txt << 'DOC'
 
-1. ip (8) - show / manipulate routing, network devices, interfaces
-   Purpose: Modern tool for network interface configuration
-   Common use: ip addr show, ip link set dev eth0 up
-   Replaces: ifconfig (older tool)
-   man page: man 8 ip
-   
-   Why relevant: Primary tool for interface configuration in RHEL
+Key commands found:
+- ip: Modern interface configuration
+- nmcli: NetworkManager CLI
+- ifconfig: Legacy tool (deprecated)
 
-2. nmcli (1) - command-line tool for controlling NetworkManager
-   Purpose: NetworkManager command-line interface
-   Common use: nmcli connection show, nmcli device status
-   Critical for: Managing network connections on RHEL
-   man page: man 1 nmcli
-   
-   Why relevant: RHEL's default network management tool
+AND logic (-a) focuses results by requiring ALL keywords.
+DOC
 
-3. ifconfig (8) - configure a network interface
-   Purpose: Legacy network interface configuration
-   Status: Deprecated but still available
-   Common use: ifconfig eth0 up
-   Replacement: Use 'ip' command instead
-   man page: man 8 ifconfig
-   
-   Why relevant: May see in old scripts, but prefer 'ip'
+EXPLANATION:
+  • apropos keyword: Searches descriptions
+  • -a flag: AND logic (all keywords must match)
+  • More focused than single keyword
+  • Better than piping to grep
 
-4. ethtool (8) - query or control network driver and hardware
-   Purpose: Display/change ethernet device settings
-   Common use: ethtool eth0 (show interface info)
-   Use cases: Check link speed, duplex, driver info
-   man page: man 8 ethtool
-   
-   Why relevant: Hardware-level interface diagnostics
-
-5. nmtui (1) - Text User Interface for controlling NetworkManager
-   Purpose: Interactive text-based network configuration
-   Common use: nmtui (launches TUI menu)
-   Easier than: nmcli for beginners
-   man page: man 1 nmtui
-   
-   Why relevant: User-friendly alternative to nmcli
-
-COMPARISON WITH GREP METHOD:
------------------------------
-Alternative approach:
-  apropos network | grep interface
-  
-Problems with grep approach:
-  - Returns false positives (lines with "interface" anywhere)
-  - Less precise than -a flag
-  - Misses results where words appear in different order
-  
-Advantage of -a flag:
-  - True AND logic
-  - Searches both description fields properly
-  - More accurate results
-
-RHCSA RELEVANCE:
-----------------
-Exam scenarios requiring network interface tools:
-  - "Configure network interface with static IP"
-    → Need: ip or nmcli
-  - "Bring interface up/down"
-    → Need: ip link or nmcli
-  - "Check interface status"
-    → Need: ip addr, nmcli device status
-
-Quick discovery:
-  apropos -a network interface
-  → Finds all relevant tools immediately
-  → No need to remember specific command names
-
-ADVANCED APROPOS USAGE:
------------------------
-Multiple AND conditions:
-  apropos -a network interface configure
-  → Returns only commands dealing with ALL THREE concepts
-  
-  apropos -a user password change
-  → Returns tools for changing user passwords specifically
-
-Combining with OR logic (using grep):
-  apropos -a network interface | grep -E '(ip|nmcli)'
-  → AND logic for keywords, then filter specific commands
-
-VERIFICATION:
-=============
-Try the searches:
-  # Broad search
-  apropos network | wc -l
-  # Count the results (probably 100+)
-  
-  # Focused search
-  apropos -a network interface | wc -l
-  # Much fewer results (10-20)
-  
-  # See the difference
-  apropos -a network interface
-  # All results mention BOTH network AND interface
-  
-  # Admin tools only
-  apropos -a network interface | grep '(8)'
-  # Focus on system administration commands
-EOF_DOC
-
-Explanation:
-
-Apropos Search Logic:
-  • apropos keyword: OR logic (matches any occurrence)
-  • apropos -a key1 key2: AND logic (must match both)
-  • apropos key1 | grep key2: Grep filter (less precise)
-
-Why AND Logic Matters:
-  Single keyword searches often return too many irrelevant results.
-  
-  Example: apropos "password"
-  Returns hundreds of results including:
-    - Password changing tools
-    - Password generation
-    - Password storage
-    - Password policies
-    - Password encryption
-    - Password prompts in scripts
-    - ... anything mentioning password
-  
-  Better: apropos -a user password change
-  Returns only tools specifically for changing user passwords.
-
-Technical Implementation:
-  • apropos searches the NAME and DESCRIPTION fields in man pages
-  • -a flag requires ALL terms present in EITHER field
-  • Order doesn't matter: "network interface" = "interface network"
-  • Case-insensitive by default
-
-Real Exam Scenarios:
-
-Scenario 1: "Configure firewall rules"
-  Don't know command name, so:
-    apropos firewall
-    → Returns: firewalld, iptables, nftables, etc.
-  
-  Too many options, so:
-    apropos -a firewall zone
-    → Returns: firewalld-specific commands
-  
-  Now you know: firewall-cmd is the tool
-
-Scenario 2: "Mount network filesystem"
-  Starting point:
-    apropos mount
-    → Returns 50+ results (mount, umount, fstab, etc.)
-  
-  Narrowing down:
-    apropos -a mount network
-    → Returns: mount.nfs, showmount, etc.
-  
-  Found the tool: mount.nfs
-
-Multiple Keywords Best Practices:
-  1. Start with 2 keywords (most common)
-  2. Add 3rd keyword if still too many results
-  3. Use section filtering: | grep '(8)' for admin tools
-  4. Use section filtering: | grep '(1)' for user commands
-
-Common Combinations for RHCSA:
-  • apropos -a file system
-  • apropos -a user account
-  • apropos -a network configure
-  • apropos -a disk partition
-  • apropos -a service manage
-  • apropos -a firewall rule
-
-Verification:
-  # Test AND logic
+Common patterns:
   apropos -a disk partition
-  # Should show: fdisk, parted, partprobe, etc.
-  
-  # Compare with single keyword
-  apropos disk | wc -l
-  apropos partition | wc -l
-  apropos -a disk partition | wc -l
-  # Notice the focused results with -a
-
+  apropos -a user password
+  apropos -a network configure
 EOF
 }
 
 hint_step_1() {
-    echo "  Use 'apropos -a network interface' for AND logic, compare with single keyword"
+    echo "  Use: apropos -a network interface"
 }
 
-# Due to length, I'll continue with remaining steps in the next parts
-# Let me add placeholders for steps 2-6 and complete the lab structure
-
+# STEP 2
 show_step_2() {
     cat << 'EOF'
 TASK: Use exact match searching
 
-[Step 2 content - searching for exact command name matches with apropos -e]
+Find commands that start with "user" exactly.
+
+Requirements:
+  • Use: apropos -e '^user'
+  • ^ means "starts with"
+  • Compare with: apropos user (finds "username", "userspace", etc.)
+  • Save to: /opt/advanced_docs/research/user_commands.txt
+
+Example:
+  apropos user           # Finds partial matches
+  apropos -e '^user'     # Only commands starting with "user"
 EOF
 }
 
 validate_step_2() {
-    [ -f "/opt/advanced_docs/research/user_commands_exact.txt" ]
+    [ -f "/opt/advanced_docs/research/user_commands.txt" ] && \
+    [ $(wc -l < "/opt/advanced_docs/research/user_commands.txt") -ge 3 ]
 }
 
 solution_step_2() {
     cat << 'EOF'
-[Solution for exact match searching with apropos -e]
+
+SOLUTION:
+─────────
+# Partial match (many results)
+apropos user
+
+# Exact match (focused)
+apropos -e '^user'
+
+# Save findings
+apropos -e '^user' > /opt/advanced_docs/research/user_commands.txt
+
+# Add documentation
+cat >> /opt/advanced_docs/research/user_commands.txt << 'DOC'
+
+Commands found starting with "user":
+- useradd: Create new user
+- userdel: Delete user
+- usermod: Modify user
+- userdbctl: User database control (systemd)
+
+Regex patterns:
+  ^user  - Starts with "user"
+  user$  - Ends with "user"
+  ^user.*mod - Starts with user, contains mod
+DOC
+
+EXPLANATION:
+  • -e enables regex/exact matching
+  • ^ = starts with
+  • $ = ends with
+  • .* = any characters
+  
+Useful patterns:
+  apropos -e '^net'     # Commands starting with "net"
+  apropos -e 'config$'  # Commands ending with "config"
 EOF
 }
 
 hint_step_2() {
-    echo "  Use 'apropos -e ^user' for exact matches starting with 'user'"
+    echo "  Use: apropos -e '^user'"
 }
 
+# STEP 3
 show_step_3() {
     cat << 'EOF'
-TASK: Search within all man page content
+TASK: Search within man page content
 
-[Step 3 content - using man -K to search actual content]
+Use man -K to search INSIDE all man pages for specific text.
+
+Requirements:
+  • Use: man -K "configuration file"
+  • This searches actual man page content (slow!)
+  • Press 'q' to skip pages you don't want
+  • Find at least 2 relevant man pages
+  • Save to: /opt/advanced_docs/research/config_pages.txt
+
+Warning: This is SLOW but very powerful when you don't know the command name.
+
+Example:
+  man -K "force unmount"  # Finds umount, fusermount, etc.
 EOF
 }
 
 validate_step_3() {
-    [ -f "/opt/advanced_docs/research/force_unmount_pages.txt" ]
+    [ -f "/opt/advanced_docs/research/config_pages.txt" ]
 }
 
 solution_step_3() {
     cat << 'EOF'
-[Solution for man -K content searching]
+
+SOLUTION:
+─────────
+# Search all man pages (SLOW - be patient!)
+man -K "configuration file"
+# Press 'q' to skip through results
+# Press Ctrl+C to stop search
+
+# Document findings
+cat > /opt/advanced_docs/research/config_pages.txt << 'DOC'
+MAN -K SEARCH RESULTS
+=====================
+
+Search term: "configuration file"
+
+Pages found:
+1. sshd_config(5) - SSH daemon configuration
+   Location: /etc/ssh/sshd_config
+   
+2. httpd.conf(5) - Apache config (if installed)
+   Location: /etc/httpd/conf/httpd.conf
+   
+3. rsyslog.conf(5) - System logging config
+   Location: /etc/rsyslog.conf
+
+WHY man -K IS USEFUL:
+- Don't need to know exact command name
+- Searches ALL man page text
+- Finds related commands you didn't know existed
+-When to use:
+  * You know what you want to do but not the command
+  * Looking for config file locations
+  * Finding all commands related to a concept
+
+DOWNSIDE:
+- Very slow (searches thousands of pages)
+- Can take 30+ seconds
+- Use Ctrl+C to stop if taking too long
+
+BETTER ALTERNATIVES (if you know more):
+- apropos with keywords
+- grep through /usr/share/doc
+- Check package documentation
+DOC
+
+EXPLANATION:
+  • man -K: Searches full text of ALL man pages
+  • -K (capital): Full content search
+  • -k (lowercase): Same as apropos (descriptions only)
+  
+Use cases:
+  • "I need to configure X but don't know the command"
+  • "Where is the config file for Y?"
+  • "What commands deal with Z concept?"
+
+Example searches:
+  man -K "network interface"
+  man -K "user password"
+  man -K "mount options"
 EOF
 }
 
 hint_step_3() {
-    echo "  Use 'man -K \"force unmount\"' to search all man page content (slow but powerful)"
+    echo "  Use: man -K 'configuration file' (be patient, it's slow!)"
 }
 
+# STEP 4
 show_step_4() {
     cat << 'EOF'
 TASK: Find man page file locations
 
-[Step 4 content - using man -w to locate source files]
+Use man -w to see where man page files are actually stored.
+
+Requirements:
+  • Find location of: ls, systemctl, passwd
+  • Use: man -w command
+  • Use: man -wa passwd (shows ALL sections)
+  • Note: Files are compressed (.gz)
+  • Save to: /opt/advanced_docs/research/manpage_locations.txt
+
+Example:
+  man -w ls           # Shows: /usr/share/man/man1/ls.1.gz
+  man -wa passwd      # Shows ALL sections of passwd
 EOF
 }
 
@@ -542,19 +358,113 @@ validate_step_4() {
 
 solution_step_4() {
     cat << 'EOF'
-[Solution for finding man page locations with man -w]
+
+SOLUTION:
+─────────
+# Find single man page
+man -w ls
+# Output: /usr/share/man/man1/ls.1.gz
+
+# Find all sections
+man -wa passwd
+# Output: /usr/share/man/man1/passwd.1.gz
+#         /usr/share/man/man5/passwd.5.gz
+
+# Document findings
+cat > /opt/advanced_docs/research/manpage_locations.txt << 'DOC'
+MAN PAGE FILE LOCATIONS
+=======================
+
+Command: man -w COMMAND
+
+Results:
+--------
+ls:
+  /usr/share/man/man1/ls.1.gz
+  Section 1: User commands
+  
+systemctl:
+  /usr/share/man/man1/systemctl.1.gz
+  Section 1: User commands
+  
+passwd (multiple sections):
+  /usr/share/man/man1/passwd.1.gz  - passwd command
+  /usr/share/man/man5/passwd.5.gz  - /etc/passwd file format
+
+FILE FORMAT:
+  /usr/share/man/man[section]/command.[section].gz
+  
+  Example: ls.1.gz
+    - ls = command name
+    - 1 = section number
+    - .gz = gzip compressed
+
+SECTIONS:
+  1: User commands
+  5: File formats
+  8: System admin commands
+
+WHY THIS MATTERS:
+- Understand man page organization
+- Can view raw files if needed: zcat /path/to/man.gz
+- Troubleshoot missing man pages
+- Create custom man pages in same format
+
+VIEW RAW:
+  zcat /usr/share/man/man1/ls.1.gz | less
+  # Shows the unformatted man page source
+DOC
+
+EXPLANATION:
+  • man -w: Shows file location
+  • man -wa: Shows ALL sections
+  • .gz extension: Compressed with gzip
+  • Section numbers in filename and path
+  
+View raw man page:
+  zcat $(man -w ls) | less
+  # Decompress and view source
+
+Man page sections:
+  1: User commands
+  2: System calls
+  3: Library functions
+  4: Special files
+  5: File formats
+  6: Games
+  7: Miscellaneous
+  8: Admin commands
+  9: Kernel routines
 EOF
 }
 
 hint_step_4() {
-    echo "  Use 'man -w command' to see where man page files are stored"
+    echo "  Use: man -w ls, man -wa passwd"
 }
 
+# STEP 5
 show_step_5() {
     cat << 'EOF'
 TASK: Navigate GNU Info documentation
 
-[Step 5 content - using info pages for GNU utilities]
+Info pages provide more detailed docs for GNU utilities than man pages.
+
+Requirements:
+  • Open: info coreutils
+  • Navigate using: n (next), p (previous), u (up)
+  • Find the 'ls' section
+  • Compare: info ls vs man ls
+  • Save comparison to: /opt/advanced_docs/research/info_vs_man.txt
+
+Navigation:
+  Space      - Next screen
+  Backspace  - Previous screen
+  n          - Next node
+  p          - Previous node
+  u          - Up to parent
+  Tab        - Next hyperlink
+  Enter      - Follow link
+  q          - Quit
 EOF
 }
 
@@ -564,34 +474,293 @@ validate_step_5() {
 
 solution_step_5() {
     cat << 'EOF'
-[Solution for info page navigation]
+
+SOLUTION:
+─────────
+# Open info for coreutils
+info coreutils
+# Navigate with: n, p, u, Tab, Enter, q
+
+# View specific command
+info ls
+# Often more detailed than man page
+
+# Create comparison document
+cat > /opt/advanced_docs/research/info_vs_man.txt << 'DOC'
+INFO vs MAN PAGES
+=================
+
+Tested with: ls command
+
+MAN PAGE (man ls):
+------------------
+- Concise, focused documentation
+- Organized by OPTIONS, DESCRIPTION, EXAMPLES
+- Quick reference style
+- Traditional Unix format
+- Works for all commands
+
+INFO PAGE (info ls):
+--------------------
+- More detailed explanations
+- Hyperlinked navigation
+- Organized hierarchically
+- Better examples and context
+- Only for GNU utilities
+
+KEY DIFFERENCES:
+----------------
+Format:
+  man: Flat, scrollable document
+  info: Hierarchical, node-based
+
+Navigation:
+  man: Space, arrows, /search, q
+  info: n/p/u, Tab/Enter, q
+
+Detail Level:
+  man: Concise reference
+  info: Tutorial + reference
+
+Coverage:
+  man: All Unix/Linux commands
+  info: Primarily GNU tools
+
+WHEN TO USE WHICH:
+------------------
+Use man when:
+  - Quick option reference
+  - Non-GNU commands
+  - Just need syntax
+  
+Use info when:
+  - Learning new GNU tool
+  - Need detailed examples
+  - Want conceptual explanations
+  - Following tutorial-style docs
+
+RHCSA RELEVANCE:
+----------------
+Exam likely uses man pages (more universal), but knowing
+info exists shows documentation awareness.
+
+GNU tools with good info pages:
+  - coreutils (ls, cp, mv, etc.)
+  - bash
+  - tar
+  - grep, sed, awk
+  - gzip
+
+NAVIGATION REMINDER:
+  n: next node
+  p: previous node
+  u: up one level
+  l: last visited
+  Tab: next hyperlink
+  Enter: follow hyperlink
+  q: quit
+DOC
+
+EXPLANATION:
+  • Info: GNU's documentation system
+  • More detailed than man for GNU tools
+  • Hierarchical organization
+  • Hyperlinked navigation
+  
+Common GNU tools:
+  info coreutils  # ls, cp, mv, mkdir, etc.
+  info bash       # Bash shell
+  info tar        # tar command
+  info grep       # grep command
+
+Info is especially good for:
+  - Complex GNU utilities
+  - Learning new tools
+  - Understanding concepts
+  - Following tutorials
 EOF
 }
 
 hint_step_5() {
-    echo "  Use 'info coreutils' then navigate with n/p/u/Tab/Enter"
+    echo "  Use: info coreutils, navigate with n/p/u, compare with man ls"
 }
 
+# STEP 6
 show_step_6() {
     cat << 'EOF'
-TASK: Explore /usr/share/doc
+TASK: Explore package documentation
 
-[Step 6 content - finding package documentation and examples]
+/usr/share/doc contains READMEs, examples, and additional docs.
+
+Requirements:
+  • List: ls /usr/share/doc
+  • Pick a package (bash, systemd, openssh-server, etc.)
+  • Explore: README, examples/ subdirectory
+  • Find example configuration files
+  • Save findings to: /opt/advanced_docs/reference/package_docs.txt
+
+Example:
+  ls /usr/share/doc/bash/
+  cat /usr/share/doc/bash/README
+  ls /usr/share/doc/openssh/examples/
 EOF
 }
 
 validate_step_6() {
-    [ -d "/opt/advanced_docs/reference" ] && [ $(ls -1 /opt/advanced_docs/reference 2>/dev/null | wc -l) -gt 0 ]
+    [ -d "/opt/advanced_docs/reference" ] && \
+    [ $(ls -1 /opt/advanced_docs/reference 2>/dev/null | wc -l) -gt 0 ]
 }
 
 solution_step_6() {
     cat << 'EOF'
-[Solution for exploring /usr/share/doc]
+
+SOLUTION:
+─────────
+# List available packages
+ls /usr/share/doc | head -20
+
+# Explore bash documentation
+ls -la /usr/share/doc/bash*/
+
+# View README files
+find /usr/share/doc/bash* -name "README*" -exec cat {} \;
+
+# Find example configs
+find /usr/share/doc -name "*.conf.example" -o -name "examples" -type d
+
+# Document findings
+cat > /opt/advanced_docs/reference/package_docs.txt << 'DOC'
+PACKAGE DOCUMENTATION EXPLORATION
+==================================
+
+Location: /usr/share/doc/
+
+Packages Explored:
+------------------
+
+1. BASH (/usr/share/doc/bash-*)
+   Files found:
+   - README: General information
+   - CHANGES: Version history
+   - FAQ: Frequently asked questions
+   - examples/: Sample scripts
+   
+   Useful for: Learning bash features, finding script examples
+
+2. SYSTEMD (/usr/share/doc/systemd/)
+   Files found:
+   - README: Systemd overview
+   - examples/: Unit file examples
+   - Documentation links
+   
+   Useful for: Creating custom services, understanding systemd
+
+3. OPENSSH (/usr/share/doc/openssh-server/)
+   Files found:
+   - README: SSH server info
+   - sshd_config.example: Example configuration
+   
+   Useful for: SSH server configuration examples
+
+COMMON FILE TYPES:
+------------------
+- README / README.md: Package overview
+- INSTALL: Installation instructions
+- CHANGES / ChangeLog: Version history
+- LICENSE / COPYING: License information
+- examples/: Sample configurations
+- *.conf.example: Example config files
+
+WHY THIS MATTERS:
+-----------------
+- Man pages don't always have full examples
+- Configuration examples save time
+- READMEs explain package-specific details
+- Some packages have extensive docs here
+
+RHCSA USE CASES:
+----------------
+Task: "Configure SSH server to disable root login"
+Steps:
+  1. Check man sshd_config for options
+  2. Look at /usr/share/doc/openssh*/sshd_config.example
+  3. See working examples with explanations
+  4. Apply to /etc/ssh/sshd_config
+
+Task: "Create a systemd service"
+Steps:
+  1. Check man systemd.service
+  2. Look at /usr/share/doc/systemd/examples/
+  3. Copy and modify example unit file
+  4. Place in /etc/systemd/system/
+
+FINDING EXAMPLES:
+-----------------
+# Find all example configs
+find /usr/share/doc -name "*.example" -o -name "*.sample"
+
+# Find README files
+find /usr/share/doc -name "README*"
+
+# Find examples directories
+find /usr/share/doc -type d -name "examples"
+
+# Search for specific topic
+grep -r "disable root" /usr/share/doc/openssh* 2>/dev/null
+DOC
+
+# Create reference for common packages
+cat > /opt/advanced_docs/reference/useful_doc_locations.txt << 'DOC'
+QUICK REFERENCE: USEFUL DOC LOCATIONS
+======================================
+
+Network:
+  /usr/share/doc/NetworkManager/
+  /usr/share/doc/openssh*/
+  /usr/share/doc/firewalld/
+
+System:
+  /usr/share/doc/systemd/
+  /usr/share/doc/bash*/
+  /usr/share/doc/coreutils/
+
+Security:
+  /usr/share/doc/selinux-policy/
+  /usr/share/doc/sudo/
+  /usr/share/doc/pam*/
+
+Storage:
+  /usr/share/doc/lvm2/
+  /usr/share/doc/mdadm/
+  /usr/share/doc/nfs-utils/
+DOC
+
+EXPLANATION:
+  • /usr/share/doc: Package documentation directory
+  • Each package has its own subdirectory
+  • Contains files not in man pages
+  • Often has practical examples
+  
+Typical structure:
+  /usr/share/doc/[package]/
+    ├── README
+    ├── CHANGES
+    ├── LICENSE
+    ├── examples/
+    │   ├── config1.conf.example
+    │   └── config2.conf.example
+    └── ...
+
+Best practices:
+  1. Check man pages first (quick reference)
+  2. Check /usr/share/doc for examples
+  3. Check /etc/ for default configs
+  4. Combine all three for full understanding
 EOF
 }
 
 hint_step_6() {
-    echo "  Explore 'ls /usr/share/doc', find README files and examples directories"
+    echo "  Explore: ls /usr/share/doc, find README and examples"
 }
 
 #############################################################################
@@ -601,12 +770,13 @@ validate() {
     local score=0
     local total=6
     
-    echo "Checking your configuration..."
+    echo "Checking your research..."
     echo ""
     
     for i in {1..6}; do
         print_color "$CYAN" "[$i/$total] Checking step $i..."
         if validate_step_$i 2>/dev/null; then
+            print_color "$GREEN" "  ✓ Step $i complete"
             ((score++))
         else
             print_color "$RED" "  ✗ Step $i incomplete"
@@ -614,15 +784,23 @@ validate() {
         echo ""
     done
     
-    print_color "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_color "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_color "$BOLD" "FINAL SCORE: $score/$total"
     
     if [ $score -eq $total ]; then
         print_color "$GREEN" "STATUS: ✓ PASSED"
+        echo ""
+        echo "Excellent! You've mastered:"
+        echo "  • apropos -a for focused searches"
+        echo "  • apropos -e for exact matching"
+        echo "  • man -K for desperate searches"
+        echo "  • man -w for file locations"
+        echo "  • info page navigation"
+        echo "  • /usr/share/doc exploration"
     else
-        print_color "$YELLOW" "STATUS: ⚠ INCOMPLETE ($score/$total checks passed)"
+        print_color "$YELLOW" "STATUS: ⚠ INCOMPLETE ($score/$total)"
     fi
-    print_color "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_color "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
     export VALIDATION_SCORE=$score
     export VALIDATION_TOTAL=$total
@@ -634,15 +812,34 @@ validate() {
 #############################################################################
 solution() {
     cat << 'EOF'
-[Solutions provided in individual step functions above]
+COMPLETE SOLUTIONS
+==================
+
+See individual solution_step_N() functions for detailed solutions.
+
+QUICK REFERENCE:
+----------------
+1. AND logic:     apropos -a network interface
+2. Exact match:   apropos -e '^user'
+3. Content search: man -K "configuration file"
+4. File location: man -w ls, man -wa passwd
+5. Info pages:    info coreutils, navigate with n/p/u
+6. Package docs:  ls /usr/share/doc, find READMEs and examples
 
 KEY TAKEAWAYS:
-- apropos -a: AND logic for focused searches
-- apropos -e: Exact matching
-- man -K: Content search (slow but comprehensive)
-- man -w: Find file locations
-- info: GNU documentation (detailed)
-- /usr/share/doc: Examples and READMEs
+--------------
+• apropos -a: Focused searches (AND logic)
+• man -K: When desperate (searches all content)
+• info: Better than man for GNU tools
+• /usr/share/doc: Examples not in man pages
+
+EXAM STRATEGY:
+--------------
+1. Start with: apropos [keywords]
+2. If too many results: apropos -a [key1] [key2]
+3. Still stuck: man -K "what you want to do"
+4. Need examples: check /usr/share/doc/[package]/
+5. GNU tool: try info [command]
 EOF
 }
 
@@ -650,11 +847,11 @@ EOF
 # CLEANUP
 #############################################################################
 cleanup_lab() {
-    echo "Cleaning up lab environment..."
+    echo "Cleaning up..."
     userdel -r researcher 2>/dev/null || true
     rm -rf /opt/advanced_docs 2>/dev/null || true
-    echo "  ✓ All lab components removed"
+    echo "  ✓ Cleanup complete"
 }
 
-# Execute the main framework
+# Execute
 main "$@"
