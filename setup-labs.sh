@@ -156,49 +156,22 @@ fix_line_endings() {
         return 0
     fi
     
-    local script_count=0
-    local fixed_count=0
-    local error_count=0
-    
-    # Use temporary file to store script list
-    local temp_file=$(mktemp)
-    find "$SCRIPT_DIR" -type f -name "*.sh" 2>/dev/null > "$temp_file"
-    
-    script_count=$(wc -l < "$temp_file")
+    # Count scripts
+    local script_count=$(find "$SCRIPT_DIR" -type f -name "*.sh" 2>/dev/null | wc -l)
     
     if [ $script_count -eq 0 ]; then
         print_warning "No shell scripts found in $SCRIPT_DIR"
-        rm -f "$temp_file"
         return 0
     fi
     
     print_color "$CYAN" "  Found $script_count shell scripts to check..."
     
-    # Process each script
-    while IFS= read -r script; do
-        if [ -f "$script" ]; then
-            # Check if file has CRLF line endings (Windows format)
-            # Use a timeout to prevent hanging
-            if timeout 2s file "$script" 2>/dev/null | grep -q "CRLF" 2>/dev/null; then
-                # Try to convert with timeout
-                if timeout 5s dos2unix "$script" 2>/dev/null; then
-                    ((fixed_count++))
-                else
-                    ((error_count++))
-                fi
-            fi
-        fi
-    done < "$temp_file"
-    
-    rm -f "$temp_file"
-    
-    if [ $fixed_count -eq 0 ]; then
-        print_success "All $script_count scripts already have Unix line endings"
+    # Convert all scripts directly (dos2unix is idempotent - safe to run on already-converted files)
+    # Using + instead of \; to batch process files for efficiency
+    if find "$SCRIPT_DIR" -type f -name "*.sh" -exec dos2unix {} + 2>/dev/null; then
+        print_success "All $script_count scripts now have Unix line endings"
     else
-        print_success "Converted $fixed_count of $script_count scripts"
-        if [ $error_count -gt 0 ]; then
-            print_warning "$error_count scripts encountered errors during conversion"
-        fi
+        print_warning "Line ending conversion completed with some warnings"
     fi
 }
 
@@ -206,43 +179,21 @@ fix_line_endings() {
 set_permissions() {
     print_step "Setting executable permissions on shell scripts..."
     
-    # Use a temporary file to avoid process substitution issues
-    local temp_file=$(mktemp)
-    find "$SCRIPT_DIR" -type f -name "*.sh" 2>/dev/null > "$temp_file"
-    
-    local count=$(wc -l < "$temp_file")
+    # Count scripts first
+    local count=$(find "$SCRIPT_DIR" -type f -name "*.sh" 2>/dev/null | wc -l)
     
     if [ "$count" -eq 0 ]; then
         print_warning "No shell scripts found to make executable"
-        rm -f "$temp_file"
         return 0
     fi
     
     print_color "$CYAN" "  Found $count shell scripts to make executable..."
     
-    local success=0
-    local failed=0
-    
-    # Make each script executable
-    while IFS= read -r script; do
-        if [ -f "$script" ]; then
-            if chmod +x "$script" 2>/dev/null; then
-                ((success++))
-            else
-                ((failed++))
-            fi
-        fi
-    done < "$temp_file"
-    
-    rm -f "$temp_file"
-    
-    if [ $success -gt 0 ]; then
-        print_success "Made $success scripts executable"
-        if [ $failed -gt 0 ]; then
-            print_warning "$failed scripts could not be made executable"
-        fi
+    # Use find with -exec for direct execution (most reliable)
+    if find "$SCRIPT_DIR" -type f -name "*.sh" -exec chmod +x {} \; 2>/dev/null; then
+        print_success "Made $count scripts executable"
     else
-        print_error "Failed to set executable permissions"
+        print_warning "Some scripts may not have been made executable"
     fi
 }
 
@@ -328,54 +279,55 @@ create_lab_wrappers() {
     
     local wrapper_count=0
     
-    # Find all lab scripts in both root labs/ and module subdirectories
-    # Use temporary file to avoid process substitution issues
-    local temp_file=$(mktemp)
-    find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null > "$temp_file"
+    # Count lab scripts
+    local lab_count=$(find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null | wc -l)
     
-    local lab_count=$(wc -l < "$temp_file")
+    if [ "$lab_count" -eq 0 ]; then
+        print_warning "No numbered lab scripts found in labs/ directory"
+        echo ""
+        print_color "$YELLOW" "  Labs should be named: XX-topic.sh or XXY-topic.sh"
+        print_color "$YELLOW" "  Where XX is a number (01, 02, 03...) and Y is optional letter (A, B, C...)"
+        return 0
+    fi
+    
     print_color "$CYAN" "  Found $lab_count lab scripts to process..."
     
-    # Process each lab script
-    while IFS= read -r lab_script; do
-        if [ -f "$lab_script" ]; then
-            local lab_basename=$(basename "$lab_script")
-            
-            # Extract lab number from various formats:
-            # 01-name.sh → 01
-            # 03A-name.sh → 03
-            # 10B-name.sh → 10
-            if [[ $lab_basename =~ ^([0-9]{2})[A-Z]?-.*\.sh$ ]]; then
-                local lab_num="${BASH_REMATCH[1]}"
-                local cmd_name="rhcsa-lab-${lab_num}"
-                local target_link="$BIN_DIR/$cmd_name"
+    # Process lab scripts using a subshell to avoid hangs
+    (
+        find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null | while IFS= read -r lab_script; do
+            if [ -f "$lab_script" ]; then
+                local lab_basename=$(basename "$lab_script")
                 
-                # Remove old symlink if exists
-                if [ -L "$target_link" ]; then
-                    sudo rm "$target_link" 2>/dev/null
-                fi
-                
-                # Create symlink
-                if sudo ln -sf "$lab_script" "$target_link" 2>/dev/null; then
-                    ((wrapper_count++))
+                # Extract lab number from various formats:
+                # 01-name.sh → 01
+                # 03A-name.sh → 03
+                # 10B-name.sh → 10
+                if [[ $lab_basename =~ ^([0-9]{2})[A-Z]?-.*\.sh$ ]]; then
+                    local lab_num="${BASH_REMATCH[1]}"
+                    local cmd_name="rhcsa-lab-${lab_num}"
+                    local target_link="$BIN_DIR/$cmd_name"
+                    
+                    # Remove old symlink if exists
+                    [ -L "$target_link" ] && sudo rm "$target_link" 2>/dev/null
+                    
+                    # Create symlink
+                    sudo ln -sf "$lab_script" "$target_link" 2>/dev/null && echo "1"
                 fi
             fi
-        fi
-    done < "$temp_file"
+        done
+    ) | wc -l > /tmp/wrapper_count_$$
     
-    rm -f "$temp_file"
+    wrapper_count=$(cat /tmp/wrapper_count_$$ 2>/dev/null || echo "0")
+    rm -f /tmp/wrapper_count_$$
     
-    if [ $wrapper_count -gt 0 ]; then
+    if [ "$wrapper_count" -gt 0 ]; then
         print_success "Created $wrapper_count lab shortcuts"
         echo ""
         print_color "$CYAN" "  Examples:"
         print_color "$CYAN" "    • sudo rhcsa-lab-01  (run lab 01)"
         print_color "$CYAN" "    • sudo rhcsa-lab-03  (run lab 03A or first 03x found)"
     else
-        print_warning "No numbered lab scripts found in labs/ directory"
-        echo ""
-        print_color "$YELLOW" "  Labs should be named: XX-topic.sh or XXY-topic.sh"
-        print_color "$YELLOW" "  Where XX is a number (01, 02, 03...) and Y is optional letter (A, B, C...)"
+        print_warning "Could not create lab shortcuts (may need sudo access)"
     fi
 }
 
