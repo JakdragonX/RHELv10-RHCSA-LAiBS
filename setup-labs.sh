@@ -292,52 +292,60 @@ create_lab_wrappers() {
     fi
     
     print_color "$CYAN" "  Found $lab_count lab scripts to process..."
+    echo ""
     
-    # Use a simple approach: create wrapper script for each found lab
+    # Create a wrapper creation script that will be executed
+    local wrapper_script=$(mktemp)
+    cat > "$wrapper_script" << 'WRAPPER_EOF'
+#!/bin/bash
+lab_script="$1"
+BIN_DIR="$2"
+
+if [ ! -f "$lab_script" ]; then
+    exit 1
+fi
+
+lab_basename=$(basename "$lab_script")
+
+# Extract lab number (01, 02, 03, etc.)
+if [[ $lab_basename =~ ^([0-9]{2}) ]]; then
+    lab_num="${BASH_REMATCH[1]}"
+    cmd_name="rhcsa-lab-${lab_num}"
+    target_link="$BIN_DIR/$cmd_name"
+    
+    # Remove old symlink if exists and create new one
+    sudo rm -f "$target_link" 2>/dev/null
+    
+    if sudo ln -sf "$lab_script" "$target_link" 2>/dev/null; then
+        echo "✓ Created: $cmd_name → $lab_basename"
+        exit 0
+    else
+        echo "⚠ Failed: $cmd_name"
+        exit 1
+    fi
+fi
+exit 1
+WRAPPER_EOF
+    
+    chmod +x "$wrapper_script"
+    
+    # Execute the wrapper script for each lab file
     local wrapper_count=0
-    local temp_list=$(mktemp)
-    
-    # Get list of all lab files
-    find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null > "$temp_list"
-    
-    # Process each file
-    while IFS= read -r lab_script; do
-        [ -z "$lab_script" ] && continue
-        [ ! -f "$lab_script" ] && continue
-        
-        local lab_basename=$(basename "$lab_script")
-        
-        # Extract lab number (01, 02, 03, etc.)
-        if [[ $lab_basename =~ ^([0-9]{2}) ]]; then
-            local lab_num="${BASH_REMATCH[1]}"
-            local cmd_name="rhcsa-lab-${lab_num}"
-            local target_link="$BIN_DIR/$cmd_name"
-            
-            # Remove old symlink if exists and create new one
-            sudo rm -f "$target_link" 2>/dev/null
-            
-            if sudo ln -sf "$lab_script" "$target_link" 2>/dev/null; then
-                ((wrapper_count++))
-                print_color "$GREEN" "  ✓ Created: $cmd_name → $(basename "$lab_script")"
-            else
-                print_color "$YELLOW" "  ⚠ Failed to create: $cmd_name"
-            fi
+    find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null | while IFS= read -r lab_file; do
+        if "$wrapper_script" "$lab_file" "$BIN_DIR"; then
+            ((wrapper_count++))
         fi
-    done < "$temp_list"
+    done
     
-    rm -f "$temp_list"
+    rm -f "$wrapper_script"
     
     echo ""
-    if [ "$wrapper_count" -gt 0 ]; then
-        print_success "Created $wrapper_count lab shortcuts"
-        echo ""
-        print_color "$CYAN" "  You can now run labs with commands like:"
-        print_color "$CYAN" "    • sudo rhcsa-lab-01"
-        print_color "$CYAN" "    • sudo rhcsa-lab-03"
-        print_color "$CYAN" "    • sudo rhcsa-lab-10"
-    else
-        print_warning "Could not create lab shortcuts (may need sudo access)"
-    fi
+    print_success "Lab command shortcuts created!"
+    echo ""
+    print_color "$CYAN" "  You can now run labs with commands like:"
+    print_color "$CYAN" "    • sudo rhcsa-lab-01"
+    print_color "$CYAN" "    • sudo rhcsa-lab-03"
+    print_color "$CYAN" "    • sudo rhcsa-lab-10"
 }
 
 # Display usage information
@@ -549,12 +557,20 @@ EOF
     set_permissions
     setup_lab_directory
     install_commands
+    
+    echo ""
+    echo "DEBUG: About to create lab wrappers..."
+    
     create_lab_wrappers
     
-    echo "" # Ensure newline before final output
+    echo ""
+    echo "DEBUG: Finished creating lab wrappers"
+    echo "DEBUG: About to show post-install info..."
     
     # Show final information
     show_post_install_info
+    
+    echo "DEBUG: Finished showing post-install info"
     
     # Explicit exit with success
     exit 0
