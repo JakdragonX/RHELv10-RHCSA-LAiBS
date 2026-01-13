@@ -334,35 +334,44 @@ create_lab_wrappers() {
 
 # Display usage information
 show_post_install_info() {
+    echo ""  # Ensure we start on a new line
     print_header "Installation Complete!"
     
-    cat << EOF
-Your RHCSA lab environment is now set up and ready to use!
+    cat << 'EOF'
+Your RHELv10-RHCSA-LAiBS lab environment is now set up and ready to use!
 
 QUICK START GUIDE:
 ──────────────────────────────────────────────────────────────────
 
 1. VIEW AVAILABLE LABS:
-   cd $LAB_HOME/labs
-   ls -1 [0-9]*.sh
+   cd ~/Labs/labs
+   
+   # List all modules
+   ls -d m*/
+   
+   # View labs in a specific module
+   ls m02/
+   
+   # View all labs at once
+   find . -name "[0-9]*.sh" -type f
 
 2. RUN A LAB (two ways):
    
    Standard mode (exam-style):
-     cd $LAB_HOME/labs
-     sudo ./01-user-management.sh
+     cd ~/Labs/labs/m02
+     sudo ./03A-bash-shell-basics.sh
    
    Or using the shortcut command:
-     sudo rhcsa-lab-01
+     sudo rhcsa-lab-03
 
 3. INTERACTIVE MODE (step-by-step learning):
-     sudo rhcsa-lab-01 --interactive
+     sudo rhcsa-lab-03 --interactive
 
 4. VALIDATE YOUR WORK:
-     sudo rhcsa-lab-01 --validate
+     sudo rhcsa-lab-03 --validate
 
 5. VIEW SOLUTION:
-     rhcsa-lab-01 --solution
+     rhcsa-lab-03 --solution
 
 6. TRACK YOUR PROGRESS:
      rhcsa-progress --summary
@@ -377,8 +386,16 @@ rhcsa-lab-XX           Run specific lab (replace XX with lab number)
 DIRECTORY STRUCTURE:
 ──────────────────────────────────────────────────────────────────
 
-$LAB_HOME/
-  ├── labs/              Lab scripts (01-*.sh, 02-*.sh, etc.)
+~/Labs/
+  ├── labs/              Lab scripts organized by modules
+  │   ├── 00-lab-template.sh
+  │   ├── 01-lab-example.sh
+  │   ├── m02/          Module 2: Essential Command Line Skills
+  │   │   ├── 03A-bash-shell-basics.sh
+  │   │   ├── 03B-virtual-terminals-history.sh
+  │   │   └── ...
+  │   ├── m03/          Module 3: File Management
+  │   └── ...
   ├── lab-runner.sh      Core framework (don't run directly)
   ├── track-progress.sh  Progress tracking system
   └── lab_progress.txt   Your progress data (auto-created)
@@ -391,14 +408,14 @@ TIPS:
 • Use --objectives flag for quick reference while working
 • Check your progress regularly with rhcsa-progress
 
-For issues or updates, see: $LAB_HOME/README.md
+For issues or updates, see: ~/Labs/README.md
 
 EOF
 }
 
 # Uninstall function
 uninstall_labs() {
-    print_header "Uninstalling RHCSA Lab Framework"
+    print_header "Uninstalling RHELv10-RHCSA-LAiBS"
     
     print_color "$YELLOW" "This will:"
     echo "  • Remove command shortcuts from $BIN_DIR"
@@ -423,15 +440,19 @@ uninstall_labs() {
         fi
     done
     
-    # Remove lab wrapper commands
-    mapfile -t lab_cmds < <(find "$BIN_DIR" -type l -name "rhcsa-lab-[0-9][0-9]" 2>/dev/null)
-    for lab_cmd in "${lab_cmds[@]}"; do
+    # Remove lab wrapper commands using temp file
+    local temp_file=$(mktemp)
+    find "$BIN_DIR" -type l -name "rhcsa-lab-[0-9][0-9]" 2>/dev/null > "$temp_file"
+    
+    while IFS= read -r lab_cmd; do
         if [ -n "$lab_cmd" ] && [ -L "$lab_cmd" ]; then
             sudo rm "$lab_cmd" 2>/dev/null
             print_success "Removed: $(basename "$lab_cmd")"
             ((removed++))
         fi
-    done
+    done < "$temp_file"
+    
+    rm -f "$temp_file"
     
     if [ $removed -gt 0 ]; then
         print_success "Removed $removed command shortcuts"
@@ -524,8 +545,13 @@ EOF
     install_commands
     create_lab_wrappers
     
+    echo "" # Ensure newline before final output
+    
     # Show final information
     show_post_install_info
+    
+    # Explicit exit with success
+    exit 0
 }
 
 # Execute main function
