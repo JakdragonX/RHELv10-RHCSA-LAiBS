@@ -338,7 +338,7 @@ create_lab_wrappers() {
     local temp_list=$(mktemp)
     find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null > "$temp_list"
     
-    # Process each lab file directly with xargs for maximum reliability
+    # Process each lab file - create wrapper script instead of symlink
     cat "$temp_list" | while IFS= read -r lab_file; do
         [ -z "$lab_file" ] && continue
         [ ! -f "$lab_file" ] && continue
@@ -349,16 +349,21 @@ create_lab_wrappers() {
         if [[ $lab_basename =~ ^([0-9]{2}) ]]; then
             local lab_num="${BASH_REMATCH[1]}"
             local cmd_name="rhcsa-lab-${lab_num}"
-            local target_link="$BIN_DIR/$cmd_name"
+            local target_script="$BIN_DIR/$cmd_name"
             
-            # Remove old symlink if exists and create new one
-            sudo rm -f "$target_link" 2>/dev/null || true
+            # Create a wrapper script that calls the actual lab
+            sudo tee "$target_script" > /dev/null << EOF
+#!/bin/bash
+# Wrapper script for $lab_basename
+exec "$lab_file" "\$@"
+EOF
             
-            if sudo ln -sf "$lab_file" "$target_link" 2>/dev/null; then
-                echo "✓ Created: $cmd_name → $lab_basename"
-            fi
+            # Make it executable
+            sudo chmod +x "$target_script" 2>/dev/null
+            
+            echo "✓ Created: $cmd_name → $lab_basename"
         fi
-    done || true  # Don't let loop failure kill the script
+    done || true
     
     rm -f "$temp_list"
     
