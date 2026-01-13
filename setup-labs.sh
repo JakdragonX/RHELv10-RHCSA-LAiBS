@@ -261,13 +261,13 @@ install_commands() {
         return 1
     fi
     
+    # Explicit success message without loops
     echo ""
-    print_color "$GREEN" "  Core command installed:"
-    for cmd_name in "${commands[@]}"; do
-        print_color "$CYAN" "    • $cmd_name"
-    done
+    print_success "Core framework command installed (rhcsa-progress)"
+    print_color "$YELLOW" "  → Lab-specific commands (rhcsa-lab-XX) will be created in next step..."
     echo ""
-    print_color "$YELLOW" "  Lab-specific commands (rhcsa-lab-XX) will be created in next step..."
+    
+    return 0
 }
 
 # Create helper wrapper scripts for individual labs
@@ -556,21 +556,27 @@ EOF
     fix_line_endings
     set_permissions
     setup_lab_directory
-    install_commands
     
-    echo ""
-    echo "DEBUG: About to create lab wrappers..."
+    echo "" >&2  # Force flush
+    echo "DEBUG: About to install commands..." >&2
+    
+    install_commands
+    local install_exit=$?
+    
+    echo "DEBUG: install_commands returned with exit code: $install_exit" >&2
+    echo "" >&2
+    echo "DEBUG: About to create lab wrappers..." >&2
     
     create_lab_wrappers
     
-    echo ""
-    echo "DEBUG: Finished creating lab wrappers"
-    echo "DEBUG: About to show post-install info..."
+    echo "" >&2
+    echo "DEBUG: Finished creating lab wrappers" >&2
+    echo "DEBUG: About to show post-install info..." >&2
     
     # Show final information
     show_post_install_info
     
-    echo "DEBUG: Finished showing post-install info"
+    echo "DEBUG: Finished showing post-install info" >&2
     
     # Explicit exit with success
     exit 0
