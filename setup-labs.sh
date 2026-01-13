@@ -245,11 +245,6 @@ set_permissions() {
         print_error "Failed to set executable permissions"
     fi
 }
-        fi
-    else
-        print_error "Could not make any scripts executable"
-    fi
-}
 
 # Create or update the Labs directory
 setup_lab_directory() {
