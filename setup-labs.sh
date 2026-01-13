@@ -53,6 +53,20 @@ print_error() {
     print_color "$RED" "  ✗ $1"
 }
 
+# Cleanup function for sudo refresh background process
+cleanup_sudo_refresh() {
+    if [ -f /tmp/setup-labs-sudo-refresh.pid ]; then
+        local pid=$(cat /tmp/setup-labs-sudo-refresh.pid 2>/dev/null)
+        if [ -n "$pid" ]; then
+            kill "$pid" 2>/dev/null || true
+        fi
+        rm -f /tmp/setup-labs-sudo-refresh.pid
+    fi
+}
+
+# Set trap to cleanup on exit
+trap cleanup_sudo_refresh EXIT INT TERM
+
 # Check if running as root (we need sudo for some operations)
 check_privileges() {
     if [ "$EUID" -eq 0 ]; then
@@ -67,6 +81,31 @@ check_privileges() {
         print_color "$YELLOW" "Please install sudo or run individual commands as root"
         exit 1
     fi
+    
+    # Request sudo credentials upfront and keep them cached
+    print_color "$YELLOW" "This script requires sudo privileges for some operations."
+    print_color "$YELLOW" "You may be prompted for your password..."
+    echo ""
+    
+    if ! sudo -v; then
+        print_error "Failed to obtain sudo privileges"
+        exit 1
+    fi
+    
+    # Keep sudo credentials refreshed in background
+    # This prevents timeout during long-running operations
+    (
+        while true; do
+            sleep 50
+            sudo -v
+        done
+    ) &
+    local sudo_refresh_pid=$!
+    
+    # Store PID for cleanup
+    echo "$sudo_refresh_pid" > /tmp/setup-labs-sudo-refresh.pid
+    
+    print_success "Sudo credentials obtained"
 }
 
 # Check and install dependencies
@@ -577,6 +616,9 @@ EOF
     show_post_install_info
     
     echo "DEBUG: Finished showing post-install info" >&2
+    
+    # Cleanup sudo refresh process
+    cleanup_sudo_refresh
     
     # Explicit exit with success
     exit 0
