@@ -267,6 +267,8 @@ setup_lab_directory() {
 install_commands() {
     print_step "Installing lab commands to system PATH..."
     
+    echo "DEBUG: [install_commands] Function started" >&2
+    
     # Core scripts to install as commands
     # Note: lab-runner.sh is NOT included here as it's a framework file, not a standalone command
     # Individual lab shortcuts are created by create_lab_wrappers()
@@ -274,37 +276,58 @@ install_commands() {
         ["track-progress.sh"]="rhcsa-progress"
     )
     
+    echo "DEBUG: [install_commands] Commands array declared" >&2
+    
     local installed=0
     for script in "${!commands[@]}"; do
+        echo "DEBUG: [install_commands] Processing script: $script" >&2
+        
         local cmd_name="${commands[$script]}"
         local source_file="$LAB_HOME/$script"
         local target_link="$BIN_DIR/$cmd_name"
         
+        echo "DEBUG: [install_commands] cmd_name=$cmd_name, source=$source_file, target=$target_link" >&2
+        
         if [ -f "$source_file" ]; then
+            echo "DEBUG: [install_commands] Source file exists, checking for old symlink" >&2
+            
             # Remove old symlink if it exists
             if [ -L "$target_link" ]; then
+                echo "DEBUG: [install_commands] Removing old symlink" >&2
                 sudo rm "$target_link"
+                echo "DEBUG: [install_commands] Old symlink removed" >&2
             fi
             
+            echo "DEBUG: [install_commands] About to create new symlink" >&2
             # Create new symlink
             sudo ln -sf "$source_file" "$target_link"
+            echo "DEBUG: [install_commands] Symlink created" >&2
+            
             print_success "Installed: $cmd_name → $script"
             ((installed++))
+            
+            echo "DEBUG: [install_commands] installed count: $installed" >&2
         else
             print_warning "Script not found: $source_file"
         fi
     done
+    
+    echo "DEBUG: [install_commands] Loop completed, checking installed count" >&2
     
     if [ $installed -eq 0 ]; then
         print_error "No commands were installed"
         return 1
     fi
     
+    echo "DEBUG: [install_commands] Printing success message" >&2
+    
     # Explicit success message without loops
     echo ""
     print_success "Core framework command installed (rhcsa-progress)"
     print_color "$YELLOW" "  → Lab-specific commands (rhcsa-lab-XX) will be created in next step..."
     echo ""
+    
+    echo "DEBUG: [install_commands] About to return 0" >&2
     
     return 0
 }
