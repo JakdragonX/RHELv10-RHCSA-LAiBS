@@ -18,7 +18,7 @@ readonly BOLD='\033[1m'
 
 # Configuration
 readonly LAB_HOME="$HOME/Labs"
-readonly BIN_DIR="/usr/local/bin"
+readonly BIN_DIR="/usr/bin"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Helper functions
@@ -359,9 +359,11 @@ create_lab_wrappers() {
 exec "${lab_file}" "\$@"
 WRAPPER_EOF
             
-            # Copy to target location with sudo and make executable
+            # Make temp file executable first
+            chmod +x "$wrapper_temp"
+            
+            # Copy to target location with sudo (preserves permissions)
             sudo cp "$wrapper_temp" "$target_script"
-            sudo chmod +x "$target_script"
             rm -f "$wrapper_temp"
             
             echo "✓ Created: $cmd_name → $lab_basename"
