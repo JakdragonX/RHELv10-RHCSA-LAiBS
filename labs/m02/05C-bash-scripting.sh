@@ -51,13 +51,7 @@ EOF
     dd if=/dev/zero of=/tmp/script-lab/data/medium.dat bs=1M count=5 2>/dev/null
     dd if=/dev/zero of=/tmp/script-lab/data/large.dat bs=1M count=20 2>/dev/null
     
-    # Create some numbered test files
-    touch /tmp/script-lab/data/file{01..05}.txt
-    
-    echo "  ✓ Cleaned up previous lab session"
-    echo "  ✓ Created test data files"
-    echo "  ✓ System ready for scripting practice"
-}
+
 
 #############################################################################
 # PREREQUISITES
@@ -113,43 +107,7 @@ perfect for tasks like:
   • Log processing and reporting
   • Conditional deployments
 
-LEARNING OBJECTIVES:
 
-  1. Master for-loop syntax and usage
-     • Iterate over lists: for item in list
-     • Loop through files: for f in *.txt
-     • Use ranges: for i in {1..10}
-     • Process command output: for line in $(cat file)
-
-  2. Understand while-loop patterns
-     • Loop with counters
-     • Read files line-by-line
-     • Continue until condition met
-     • Infinite loops with break
-
-  3. Write if-then-else conditional logic
-     • Test file existence: if [ -f file ]
-     • Compare numbers: if [ $a -gt $b ]
-     • Check strings: if [ "$var" = "value" ]
-     • Use [[  ]] for advanced tests
-
-  4. Use test operators effectively
-     • File tests: -f, -d, -e, -x
-     • Number comparisons: -eq, -ne, -lt, -gt
-     • String comparisons: =, !=, -z, -n
-     • Logical operators: -a (AND), -o (OR), ! (NOT)
-
-  5. Chain commands with logic operators
-     • && for "and" (run if previous succeeds)
-     • || for "or" (run if previous fails)
-     • ; to separate independent commands
-     • Combine for error handling
-
-  6. Create practical automation scripts
-     • Backup script with timestamp
-     • Service checker with status reporting
-     • File processor with size filtering
-     • User account validator
 
 HINTS:
   • Always quote variables in tests: [ "$var" = "value" ]
