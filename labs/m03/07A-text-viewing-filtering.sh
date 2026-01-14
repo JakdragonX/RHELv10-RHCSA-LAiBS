@@ -166,6 +166,9 @@ You're monitoring a production web server and need to analyze log files,
 extract specific data, and create reports. You'll use text processing
 tools to quickly get the information you need.
 
+LAB DIRECTORY: /tmp/text-lab
+  (All file paths in this lab are relative to this directory)
+
 OBJECTIVES:
 Complete these tasks to demonstrate text processing mastery:
 
