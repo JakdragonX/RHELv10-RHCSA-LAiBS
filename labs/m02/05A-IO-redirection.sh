@@ -44,18 +44,7 @@ EOF
 [WARN] Deprecated API call detected
 EOF
 
-    cat > /tmp/io-lab/users.txt << 'EOF'
-alice:1001:developers
-bob:1002:operations
-charlie:1003:developers
-david:1004:security
-eve:1005:operations
-EOF
-    
-    echo "  ✓ Cleaned up any previous lab attempts"
-    echo "  ✓ Created sample files in /tmp/io-lab/"
-    echo "  ✓ System ready for fresh lab start"
-}
+
 
 #############################################################################
 # PREREQUISITES
@@ -107,30 +96,7 @@ write normal output to STDOUT, and write errors to STDERR. By mastering
 redirection, you can build powerful command pipelines that process data
 efficiently without writing complex scripts.
 
-LEARNING OBJECTIVES:
-This lab teaches you to understand and manipulate the three I/O streams
-through hands-on practice. You'll learn when and why to use different
-redirection operators, and how to chain commands together effectively.
 
-  1. Understand STDOUT redirection (>, >>)
-     • Extract successful requests from access.log
-     • Save only HTTP 200 responses to a new file
-     • Append additional filtered data to the same file
-  
-  2. Understand STDERR redirection (2>, 2>>)
-     • Generate intentional errors and capture them
-     • Suppress error messages while keeping normal output
-     • Separate error output from normal output
-  
-  3. Master piping to build command chains (|)
-     • Count how many errors appear in error.log
-     • Find the most common HTTP status codes in access.log
-     • Create a sorted list of users by UID
-  
-  4. Combine multiple redirection techniques
-     • Redirect both STDOUT and STDERR to different files
-     • Use /dev/null to discard unwanted output
-     • Build complex pipelines that transform data
 
 HINTS:
   • > creates/overwrites a file, >> appends to it
@@ -401,42 +367,7 @@ hint_step_3() {
 }
 
 # STEP 3: STDERR redirection
-show_step_3() {
-    cat << 'EOF'
-TASK: Capture error messages using STDERR redirection
 
-Try to list files in directories that don't exist, and capture only
-the error messages to a file.
-
-Requirements:
-  • Run: ls /nonexistent /fakedir /notreal
-  • Redirect ONLY errors to: /tmp/io-lab/cmd-errors.log
-  • Use 2> to redirect STDERR (file descriptor 2)
-
-Commands you'll use:
-  • ls    - List directory (will fail on nonexistent dirs)
-  • 2>    - Redirect STDERR to a file
-
-What you're learning:
-  Programs send normal output to STDOUT (1) and errors to STDERR (2).
-  These are separate streams! You can control them independently.
-  
-  This is incredibly useful when you want to:
-  - Save errors to a log file while seeing normal output
-  - Suppress errors while keeping output
-  - Process errors and output differently
-
-Understanding file descriptors:
-  0 = STDIN  (input)
-  1 = STDOUT (normal output)
-  2 = STDERR (error output)
-  
-  When you use:
-  • >  it's actually shorthand for 1> (redirect STDOUT)
-  • 2> specifically redirects STDERR
-  • 2>&1 merges STDERR into STDOUT
-EOF
-}
 
 validate_step_3() {
     if [ ! -f "/tmp/io-lab/cmd-errors.log" ]; then
