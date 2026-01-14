@@ -33,18 +33,7 @@ setup_lab() {
     touch /tmp/expansion-lab/test2/backup.tar.gz
     touch /tmp/expansion-lab/test3/doc{1..3}.md
     
-    # Create a file with special characters for escaping practice
-    cat > /tmp/expansion-lab/special-names.txt << 'EOF'
-file with spaces.txt
-file$with$dollar.txt
-file'with'quotes.txt
-file[with]brackets.txt
-EOF
-    
-    echo "  ✓ Cleaned up previous lab session"
-    echo "  ✓ Created test files and directories"
-    echo "  ✓ System ready for expansion practice"
-}
+
 
 #############################################################################
 # PREREQUISITES
@@ -104,39 +93,7 @@ The shell expansion sequence:
   7. Globbing             * ? []
   8. Quote removal        ' " \
 
-LEARNING OBJECTIVES:
 
-  1. Understand variable expansion and scope
-     • Create and use shell variables
-     • Understand local vs environment variables
-     • Learn when to use ${} vs $
-
-  2. Master brace expansion for efficient commands
-     • Generate sequences: {1..10}, {a..z}
-     • Create multiple combinations
-     • Understand when expansion happens
-
-  3. Work with tilde (~) expansion
-     • Shortcuts for home directories
-     • ~username syntax
-     • Understanding when ~ expands
-
-  4. Practice command substitution
-     • Capture command output: $(command)
-     • Embed results in other commands
-     • Understand nested substitution
-
-  5. Master glob patterns (wildcards)
-     • * for any characters
-     • ? for single character
-     • [...] for character sets
-     • Understand when NOT to quote
-
-  6. Learn proper quoting and escaping
-     • Single quotes: preserve everything literally
-     • Double quotes: allow variable/command expansion
-     • Backslash: escape single characters
-     • When to use each type
 
 HINTS:
   • Use 'echo' to see expansion results before running commands
@@ -186,93 +143,11 @@ EOF
 }
 
 # STEP 1: Variables and export
-show_step_1() {
-    cat << 'EOF'
-TASK: Create variables and understand local vs environment scope
 
-Create a variable called MY_APP_DIR with value "/opt/myapp" and make
-it available to child processes (export it). Then create another
-variable called FILE_COUNT with the number 42, but keep it local.
 
-Requirements:
-  • Variable 1: MY_APP_DIR="/opt/myapp" (exported)
-  • Variable 2: FILE_COUNT=42 (local, not exported)
-  • Verify with: echo $MY_APP_DIR $FILE_COUNT
-  • Check if exported: env | grep MY_APP_DIR
 
-Commands you'll use:
-  • VAR=value  - Create a local shell variable
-  • export VAR - Make variable available to subshells
-  • echo $VAR  - Display variable value
-  • env        - Show environment variables
 
-What you're learning:
-  The difference between shell variables (local to current shell) and
-  environment variables (passed to child processes). This matters when
-  writing scripts or running commands that spawn subshells.
 
-Important syntax:
-  • NO SPACES around the = sign!
-  • RIGHT: VAR=value
-  • WRONG: VAR = value (this runs VAR as a command!)
-EOF
-}
-
-validate_step_1() {
-    # Check if MY_APP_DIR is set and exported
-    if [ -z "$MY_APP_DIR" ]; then
-        echo ""
-        print_color "$RED" "✗ MY_APP_DIR is not set"
-        echo "  Set it with: export MY_APP_DIR=\"/opt/myapp\""
-        return 1
-    fi
-    
-    if [ "$MY_APP_DIR" != "/opt/myapp" ]; then
-        echo ""
-        print_color "$RED" "✗ MY_APP_DIR has value '$MY_APP_DIR' (expected '/opt/myapp')"
-        return 1
-    fi
-    
-    # Check if it's exported
-    if ! env | grep -q "MY_APP_DIR=/opt/myapp"; then
-        echo ""
-        print_color "$RED" "✗ MY_APP_DIR is set but not exported"
-        echo "  Export it with: export MY_APP_DIR"
-        return 1
-    fi
-    
-    # Check if FILE_COUNT exists (it's OK if not exported)
-    if [ -z "$FILE_COUNT" ]; then
-        echo ""
-        print_color "$RED" "✗ FILE_COUNT is not set"
-        echo "  Set it with: FILE_COUNT=42"
-        return 1
-    fi
-    
-    if [ "$FILE_COUNT" != "42" ]; then
-        echo ""
-        print_color "$RED" "✗ FILE_COUNT has value '$FILE_COUNT' (expected 42)"
-        return 1
-    fi
-    
-    return 0
-}
-
-solution_step_1() {
-    cat << 'EOF'
-
-SOLUTION:
-─────────
-Commands:
-  export MY_APP_DIR="/opt/myapp"
-  FILE_COUNT=42
-
-Or alternatively:
-  MY_APP_DIR="/opt/myapp"
-  export MY_APP_DIR
-  FILE_COUNT=42
-
-Breaking it down:
   • MY_APP_DIR="/opt/myapp"
     - Creates a variable in the current shell
     - The quotes preserve any spaces in the value
@@ -465,68 +340,14 @@ hint_step_3() {
 }
 
 # STEP 3: Command substitution
-show_step_3() {
-    cat << 'EOF'
-TASK: Use command substitution to capture and reuse command output
 
-Count how many .txt files exist in /tmp/expansion-lab/ and store
-the count in a variable called TXT_COUNT. Then create a file named
-"summary-N.txt" where N is that count.
 
-Requirements:
-  • Use: find /tmp/expansion-lab -name "*.txt" | wc -l
-  • Store result in TXT_COUNT variable
-  • Create file: /tmp/expansion-lab/summary-${TXT_COUNT}.txt
-  • Use command substitution: $()
 
-Commands you'll use:
-  • find  - Search for files
-  • wc -l - Count lines
-  • $()   - Command substitution
-
-What you're learning:
-  Command substitution lets you use the output of one command as part
-  of another command. This is essential for dynamic script behavior.
-
-Two syntaxes:
-  • Modern:  $(command)    - Preferred, nestable
-  • Legacy:  `command`     - Older syntax, harder to nest
-
-Order matters:
-  Command substitution happens AFTER variable expansion but BEFORE
-  word splitting, so be careful with quotes!
-EOF
-}
-
-validate_step_3() {
-    if [ -z "$TXT_COUNT" ]; then
-        echo ""
-        print_color "$RED" "✗ TXT_COUNT variable is not set"
-        echo "  Set it with: TXT_COUNT=\$(find /tmp/expansion-lab -name \"*.txt\" | wc -l)"
-        return 1
-    fi
-    
-    # Check if the summary file exists
-    if [ ! -f "/tmp/expansion-lab/summary-${TXT_COUNT}.txt" ]; then
-        echo ""
-        print_color "$RED" "✗ File summary-${TXT_COUNT}.txt does not exist"
-        echo "  Create it with: touch /tmp/expansion-lab/summary-\${TXT_COUNT}.txt"
-        return 1
-    fi
-    
-    return 0
-}
 
 solution_step_3() {
     cat << 'EOF'
 
-SOLUTION:
-─────────
-Commands:
-  TXT_COUNT=$(find /tmp/expansion-lab -name "*.txt" | wc -l)
-  touch /tmp/expansion-lab/summary-${TXT_COUNT}.txt
 
-Breaking it down:
   • find /tmp/expansion-lab -name "*.txt"
     - Searches recursively for .txt files
     - Outputs one filename per line
@@ -613,18 +434,7 @@ hint_step_4() {
 # STEP 4: Globbing (wildcards)
 show_step_4() {
     cat << 'EOF'
-TASK: Use glob patterns to match and count files
 
-Use wildcards to:
-  1. List all .log files in /tmp/expansion-lab/ (should find dataA, dataB, dataC)
-  2. Count how many files match report*.pdf in subdirectories
-
-Requirements:
-  • First: ls /tmp/expansion-lab/*.log (observe results)
-  • Second: find /tmp/expansion-lab -name "report*.pdf" | wc -l
-  • Store the PDF count in REPORT_COUNT variable
-
-Glob patterns:
   • *     - Matches zero or more characters
   • ?     - Matches exactly one character
   • [abc] - Matches any character in the set
@@ -642,45 +452,12 @@ Critical: The shell does globbing, not the command!
 EOF
 }
 
-validate_step_4() {
-    # Check if they can list the log files (we'll validate by checking if files exist)
-    local log_count=$(ls /tmp/expansion-lab/*.log 2>/dev/null | wc -l)
-    if [ "$log_count" -lt 3 ]; then
-        echo ""
-        print_color "$RED" "✗ Not enough .log files found (expected at least 3)"
-        echo "  Files should have been created in setup"
-        return 1
-    fi
-    
-    # Check if REPORT_COUNT is set
-    if [ -z "$REPORT_COUNT" ]; then
-        echo ""
-        print_color "$RED" "✗ REPORT_COUNT variable is not set"
-        echo "  Set it with: REPORT_COUNT=\$(find /tmp/expansion-lab -name \"report*.pdf\" | wc -l)"
-        return 1
-    fi
-    
-    # Validate the count is correct
-    local actual_count=$(find /tmp/expansion-lab -name "report*.pdf" 2>/dev/null | wc -l)
-    if [ "$REPORT_COUNT" != "$actual_count" ]; then
-        echo ""
-        print_color "$RED" "✗ REPORT_COUNT is $REPORT_COUNT (expected $actual_count)"
-        return 1
-    fi
-    
-    return 0
-}
+
 
 solution_step_4() {
     cat << 'EOF'
 
-SOLUTION:
-─────────
-Commands:
-  ls /tmp/expansion-lab/*.log
-  REPORT_COUNT=$(find /tmp/expansion-lab -name "report*.pdf" | wc -l)
 
-Breaking it down:
   • ls /tmp/expansion-lab/*.log
     
     Expansion process:
@@ -1106,20 +883,7 @@ validate() {
     echo "Checking your shell expansion work..."
     echo ""
     
-    # Check 1: Variables
-    print_color "$CYAN" "[1/$total] Checking variable creation..."
-    if [ "$MY_APP_DIR" = "/opt/myapp" ] && env | grep -q "MY_APP_DIR"; then
-        if [ "$FILE_COUNT" = "42" ]; then
-            print_color "$GREEN" "  ✓ Variables set correctly (MY_APP_DIR exported, FILE_COUNT local)"
-            ((score++))
-        else
-            print_color "$RED" "  ✗ FILE_COUNT not set to 42"
-        fi
-    else
-        print_color "$RED" "  ✗ MY_APP_DIR not set or not exported"
-        print_color "$YELLOW" "  Fix: export MY_APP_DIR=\"/opt/myapp\" && FILE_COUNT=42"
-    fi
-    echo ""
+
     
     # Check 2: Brace expansion files
     print_color "$CYAN" "[2/$total] Checking brace expansion results..."
@@ -1140,31 +904,7 @@ validate() {
     fi
     echo ""
     
-    # Check 3: Command substitution
-    print_color "$CYAN" "[3/$total] Checking command substitution..."
-    if [ -n "$TXT_COUNT" ] && [ -f "/tmp/expansion-lab/summary-${TXT_COUNT}.txt" ]; then
-        print_color "$GREEN" "  ✓ Command substitution worked (TXT_COUNT=$TXT_COUNT)"
-        ((score++))
-    else
-        print_color "$RED" "  ✗ TXT_COUNT not set or summary file missing"
-        print_color "$YELLOW" "  Fix: TXT_COUNT=\$(find /tmp/expansion-lab -name \"*.txt\" | wc -l)"
-    fi
-    echo ""
-    
-    # Check 4: Globbing
-    print_color "$CYAN" "[4/$total] Checking glob patterns..."
-    if [ -n "$REPORT_COUNT" ]; then
-        local actual=$(find /tmp/expansion-lab -name "report*.pdf" 2>/dev/null | wc -l)
-        if [ "$REPORT_COUNT" = "$actual" ]; then
-            print_color "$GREEN" "  ✓ Glob patterns used correctly (REPORT_COUNT=$REPORT_COUNT)"
-            ((score++))
-        else
-            print_color "$RED" "  ✗ REPORT_COUNT is $REPORT_COUNT (expected $actual)"
-        fi
-    else
-        print_color "$RED" "  ✗ REPORT_COUNT not set"
-    fi
-    echo ""
+
     
     # Check 5: Files with spaces
     print_color "$CYAN" "[5/$total] Checking quoted variables (spaces)..."
