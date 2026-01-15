@@ -18,7 +18,7 @@ readonly BOLD='\033[1m'
 
 # Configuration
 readonly LAB_HOME="$HOME/Labs"
-readonly BIN_DIR="/usr/bin"
+readonly BIN_DIR="/usr/local/bin"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Helper functions
@@ -261,70 +261,49 @@ setup_lab_directory() {
     # Create a .lab-framework file to identify this as a lab directory
     echo "RHCSA Lab Framework" > "$LAB_HOME/.lab-framework"
     echo "Installed: $(date)" >> "$LAB_HOME/.lab-framework"
-    
-    # Create a symlink to lab-runner.sh in the labs directory
-    # This allows lab scripts in subdirectories (labs/m02/) to find it with ../lab-runner.sh
-    if [ -f "$LAB_HOME/lab-runner.sh" ] && [ -d "$LAB_HOME/labs" ]; then
-        ln -sf "$LAB_HOME/lab-runner.sh" "$LAB_HOME/labs/lab-runner.sh" 2>/dev/null
-        print_success "Created lab-runner.sh symlink in labs directory"
-    fi
 }
 
 # Install command-line shortcuts
 install_commands() {
     print_step "Installing lab commands to system PATH..."
     
-    echo "DEBUG: [install_commands] Starting installation" >&2
-    
-    # Install rhcsa-progress command with wrapper
+    # Install rhcsa-progress command with proper wrapper
     local source_file="$LAB_HOME/track-progress.sh"
     local target_script="$BIN_DIR/rhcsa-progress"
-    
-    echo "DEBUG: [install_commands] source=$source_file" >&2
-    echo "DEBUG: [install_commands] target=$target_script" >&2
     
     if [ ! -f "$source_file" ]; then
         print_error "Script not found: $source_file"
         return 1
     fi
     
-    echo "DEBUG: [install_commands] Source file exists" >&2
-    
-    # Create wrapper script that changes to LAB_HOME first
+    # Create wrapper script that properly executes track-progress.sh
+    # The key is to run it from LAB_HOME so SCRIPT_DIR resolves correctly
     local wrapper_temp=$(mktemp)
     cat > "$wrapper_temp" << WRAPPER_EOF
 #!/bin/bash
 # Wrapper for track-progress.sh
+# This ensures SCRIPT_DIR resolves to $LAB_HOME in track-progress.sh
 cd "$LAB_HOME" || exit 1
-exec "./track-progress.sh" "\$@"
+exec bash "./track-progress.sh" "\$@"
 WRAPPER_EOF
     
     # Make temp file executable
     chmod +x "$wrapper_temp"
     
-    echo "DEBUG: [install_commands] About to copy wrapper" >&2
-    
     # Copy to target location with sudo
-    sudo cp "$wrapper_temp" "$target_script" || {
-        print_error "Failed to create command"
+    if sudo cp "$wrapper_temp" "$target_script"; then
+        sudo chmod +x "$target_script"
+        print_success "Installed: rhcsa-progress → track-progress.sh"
+    else
+        print_error "Failed to create rhcsa-progress command"
         rm -f "$wrapper_temp"
         return 1
-    }
+    fi
     
     rm -f "$wrapper_temp"
     
-    echo "DEBUG: [install_commands] Wrapper created successfully" >&2
-    
-    print_success "Installed: rhcsa-progress → track-progress.sh"
-    
-    echo "DEBUG: [install_commands] Printed success message" >&2
-    echo ""
-    
     print_success "Core framework command installed (rhcsa-progress)"
     print_color "$YELLOW" "  → Lab-specific commands (rhcsa-lab-XX) will be created in next step..."
-    
-    echo "" >&2
-    echo "DEBUG: [install_commands] Function completing" >&2
     
     return 0
 }
@@ -357,8 +336,9 @@ create_lab_wrappers() {
     local temp_list=$(mktemp)
     find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null > "$temp_list"
     
+    local created=0
     # Process each lab file - create wrapper script
-    cat "$temp_list" | while IFS= read -r lab_file; do
+    while IFS= read -r lab_file; do
         [ -z "$lab_file" ] && continue
         [ ! -f "$lab_file" ] && continue
         
@@ -369,10 +349,10 @@ create_lab_wrappers() {
             local lab_id="${BASH_REMATCH[1]}"
             local cmd_name="rhcsa-lab-${lab_id}"
             local target_script="$BIN_DIR/$cmd_name"
+            local lab_dir=$(dirname "$lab_file")
             
             # Create a temporary wrapper script
             local wrapper_temp=$(mktemp)
-            local lab_dir=$(dirname "$lab_file")
             cat > "$wrapper_temp" << WRAPPER_EOF
 #!/bin/bash
 # Wrapper for ${lab_basename}
@@ -384,23 +364,25 @@ WRAPPER_EOF
             chmod +x "$wrapper_temp"
             
             # Copy to target location with sudo (preserves permissions)
-            sudo cp "$wrapper_temp" "$target_script"
-            rm -f "$wrapper_temp"
+            if sudo cp "$wrapper_temp" "$target_script"; then
+                sudo chmod +x "$target_script"
+                echo "  ✓ Created: $cmd_name → $lab_basename"
+                ((created++))
+            fi
             
-            echo "✓ Created: $cmd_name → $lab_basename"
+            rm -f "$wrapper_temp"
         fi
-    done || true
+    done < "$temp_list"
     
     rm -f "$temp_list"
     
     echo ""
-    print_success "Lab command shortcuts created!"
+    print_success "Created $created lab command shortcuts!"
     echo ""
     print_color "$CYAN" "  You can now run labs with commands like:"
     print_color "$CYAN" "    • sudo rhcsa-lab-01  (if it exists)"
     print_color "$CYAN" "    • sudo rhcsa-lab-03A (for lab 03 part A)"
     print_color "$CYAN" "    • sudo rhcsa-lab-03B (for lab 03 part B)"
-    print_color "$CYAN" "    • sudo rhcsa-lab-04A"
     echo ""
     print_color "$YELLOW" "  Note: Labs with letter suffixes (A, B, C) have separate commands"
     
@@ -409,7 +391,6 @@ WRAPPER_EOF
 
 # Display usage information
 show_post_install_info() {
-    echo ""  # Ensure we start on a new line
     print_header "Installation Complete!"
     
     cat << 'EOF'
@@ -437,16 +418,16 @@ QUICK START GUIDE:
      sudo ./03A-bash-shell-basics.sh
    
    Or using the shortcut command:
-     sudo rhcsa-lab-03
+     sudo rhcsa-lab-03A
 
 3. INTERACTIVE MODE (step-by-step learning):
-     sudo rhcsa-lab-03 --interactive
+     sudo rhcsa-lab-03A --interactive
 
 4. VALIDATE YOUR WORK:
-     sudo rhcsa-lab-03 --validate
+     sudo rhcsa-lab-03A --validate
 
 5. VIEW SOLUTION:
-     rhcsa-lab-03 --solution
+     rhcsa-lab-03A --solution
 
 6. TRACK YOUR PROGRESS:
      rhcsa-progress --summary
@@ -505,27 +486,25 @@ uninstall_labs() {
     
     print_step "Removing command shortcuts..."
     
-    # Remove core command (just rhcsa-progress, not rhcsa-lab which doesn't exist)
     local removed=0
-    if [ -L "$BIN_DIR/rhcsa-progress" ]; then
+    
+    # Remove rhcsa-progress command
+    if [ -f "$BIN_DIR/rhcsa-progress" ]; then
         sudo rm "$BIN_DIR/rhcsa-progress"
         print_success "Removed: rhcsa-progress"
         ((removed++))
     fi
     
-    # Remove lab wrapper commands using temp file
-    local temp_file=$(mktemp)
-    find "$BIN_DIR" -type l -name "rhcsa-lab-[0-9][0-9]" 2>/dev/null > "$temp_file"
-    
+    # Remove lab wrapper commands
+    # Find all rhcsa-lab-* files (not just symlinks, since we create regular files)
     while IFS= read -r lab_cmd; do
-        if [ -n "$lab_cmd" ] && [ -L "$lab_cmd" ]; then
+        if [ -n "$lab_cmd" ] && [ -f "$lab_cmd" ]; then
+            local cmd_name=$(basename "$lab_cmd")
             sudo rm "$lab_cmd" 2>/dev/null
-            print_success "Removed: $(basename "$lab_cmd")"
+            print_success "Removed: $cmd_name"
             ((removed++))
         fi
-    done < "$temp_file"
-    
-    rm -f "$temp_file"
+    done < <(find "$BIN_DIR" -type f -name "rhcsa-lab-[0-9][0-9]*" 2>/dev/null)
     
     if [ $removed -gt 0 ]; then
         print_success "Removed $removed command shortcuts"
@@ -615,27 +594,11 @@ EOF
     fix_line_endings
     set_permissions
     setup_lab_directory
-    
-    echo "" >&2  # Force flush
-    echo "DEBUG: About to install commands..." >&2
-    
     install_commands
-    local install_exit=$?
-    
-    echo "DEBUG: install_commands returned with exit code: $install_exit" >&2
-    echo "" >&2
-    echo "DEBUG: About to create lab wrappers..." >&2
-    
     create_lab_wrappers
-    
-    echo "" >&2
-    echo "DEBUG: Finished creating lab wrappers" >&2
-    echo "DEBUG: About to show post-install info..." >&2
     
     # Show final information
     show_post_install_info
-    
-    echo "DEBUG: Finished showing post-install info" >&2
     
     # Cleanup sudo refresh process
     cleanup_sudo_refresh
