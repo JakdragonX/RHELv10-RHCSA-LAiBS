@@ -458,7 +458,6 @@ Think about:
 Expected result:
   Should contain products like:
   Laptop 1200
-  Keyboard 75 (wait, this is < 100, shouldn't be here)
   Monitor 300
   (only products over $100)
 EOF
