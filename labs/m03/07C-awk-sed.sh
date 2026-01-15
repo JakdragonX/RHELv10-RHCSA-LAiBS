@@ -597,7 +597,7 @@ EOF
 }
 
 hint_step_3() {
-    echo "  Use awk with /status:failed/, print \$3, then use sed or cut to remove 'user:'"
+    echo "  Use awk with /action:login/ && /status:failed/, print \$3, then remove 'user:' prefix"
 }
 
 # STEP 3: Extract failed login users
@@ -606,34 +606,35 @@ show_step_3() {
 TASK: Find users with failed login attempts
 
 You have a log file with login attempts. Extract usernames
-for failed attempts.
+for failed login attempts only.
 
 What to do:
   • File: data/server.log
-  • Find: Lines containing "status:failed"
+  • Find: Lines with "action:login" AND "status:failed"
   • Extract: Username from field 3 (format: "user:alice")
   • Remove: The "user:" prefix (just show "alice")
   • Save to: results/failed-users.txt
 
 Tools available:
   • awk with pattern matching: /pattern/ {action}
+  • awk with multiple patterns: /pattern1/ && /pattern2/
   • Multiple approaches for removing prefix
 
 Think about:
-  • How do you filter lines with awk?
+  • How do you filter for TWO conditions in awk?
   • Which field contains the username?
   • How do you remove "user:" prefix?
 
 Approaches to consider:
-  1. awk with sub() function
-  2. awk piped to sed
-  3. awk piped to cut
+  1. awk with && for multiple patterns
+  2. Pipe grep to awk
+  3. Use awk pattern matching with sub()
 
 Expected result:
-  Should contain usernames like:
+  Should contain only failed LOGIN usernames:
   charlie
   charlie
-  (users who had failed logins)
+  (not eve, who had a failed file_upload, not a failed login)
 EOF
 }
 
@@ -675,98 +676,87 @@ solution_step_3() {
 
 SOLUTION:
 ─────────
-Method 1 - awk with sub():
+Method 1 - awk with multiple patterns:
   cd /tmp/awk-sed-lab
-  awk '/status:failed/ {sub(/user:/, "", $3); print $3}' data/server.log > results/failed-users.txt
+  awk '/action:login/ && /status:failed/ {sub(/user:/, "", $3); print $3}' data/server.log > results/failed-users.txt
 
 Method 2 - awk piped to sed:
-  awk '/status:failed/ {print $3}' data/server.log | sed 's/user://' > results/failed-users.txt
+  awk '/action:login/ && /status:failed/ {print $3}' data/server.log | sed 's/user://' > results/failed-users.txt
 
-Method 3 - awk piped to cut:
-  awk '/status:failed/ {print $3}' data/server.log | cut -d: -f2 > results/failed-users.txt
+Method 3 - grep then awk:
+  grep 'action:login' data/server.log | grep 'status:failed' | awk '{sub(/user:/, "", $3); print $3}' > results/failed-users.txt
 
 Breaking down Method 1:
   
-  awk '/status:failed/ {sub(/user:/, "", $3); print $3}' data/server.log
-      └──────┬──────   │└───────┬────────    └───┬──
-             │         │        │                 └─ Print modified field 3
-             │         │        └─ Remove "user:" from field 3
-             │         └─ sub() function
-             └─ Pattern match: lines containing "status:failed"
-
-awk pattern matching:
+  awk '/action:login/ && /status:failed/ {sub(/user:/, "", $3); print $3}' data/server.log
+      └─────┬──────    └──────┬──────   │└───────┬────────    └───┬──
+            │                 │         │        │                 └─ Print modified field 3
+            │                 │         │        └─ Remove "user:" from field 3
+            │                 │         └─ sub() function
+            │                 └─ AND both patterns must match
+            └─ Pattern 1: line contains "action:login"
   
-  /pattern/ {action}
-  • Executes action only on lines matching pattern
-  
-  Example line:
+  Example line that matches:
   "2025-01-14 10:15:00 user:charlie action:login status:failed"
   
-  /status:failed/
-  • This line matches! Execute the action.
+  /action:login/ → TRUE (contains "action:login")
+  /status:failed/ → TRUE (contains "status:failed")
+  Both TRUE → Execute action
   
-  $3 = "user:charlie"
+  Example line that does NOT match:
+  "2025-01-14 10:40:00 user:eve action:file_upload status:failed"
   
-  sub(/user:/, "", $3)
-  • sub() = substitute
-  • /user:/ = pattern to find
-  • "" = replace with nothing (delete)
-  • $3 = in field 3
-  • Result: $3 becomes "charlie"
-  
-  print $3
-  • Output: "charlie"
+  /action:login/ → FALSE (contains "action:file_upload", not login)
+  /status:failed/ → TRUE
+  Not both TRUE → Skip this line
 
-awk sub() function:
+Why we need BOTH patterns:
   
-  sub(/pattern/, "replacement", field)
-  • Substitutes first occurrence in field
+  If we only use /status:failed/:
+  • Matches charlie's failed logins ✓
+  • Also matches eve's failed file_upload ✗
   
-  gsub(/pattern/, "replacement", field)
-  • Substitutes ALL occurrences (global)
+  We need /action:login/ && /status:failed/:
+  • Only matches failed login attempts ✓
+  • Skips other failed actions (file_upload, etc.) ✓
+
+awk multiple pattern matching:
+  
+  /pattern1/ && /pattern2/
+  • Both patterns must match (AND)
+  
+  /pattern1/ || /pattern2/
+  • Either pattern can match (OR)
+  
+  /pattern1/ && !/pattern2/
+  • First matches, second does NOT match
   
   Examples:
-  sub(/^user:/, "", $3)    Remove "user:" at start of field 3
-  gsub(/ERROR/, "WARN", $0)  Replace all ERROR with WARN in line
-
-Breaking down Method 2:
+  # Lines with ERROR and containing "database":
+  awk '/ERROR/ && /database/ {print}' log
   
-  awk '/status:failed/ {print $3}' data/server.log | sed 's/user://'
-  └──────────┬────────────────────────────────   │
-             │                                    └─ Remove "user:"
-             └─ Extract field 3 from failed lines
-
-awk pattern examples:
-  # Lines containing pattern:
-  awk '/ERROR/ {print}' log.txt
+  # Lines with either ERROR or WARNING:
+  awk '/ERROR/ || /WARNING/ {print}' log
   
-  # Lines NOT containing pattern:
-  awk '!/ERROR/ {print}' log.txt
-  
-  # Lines starting with pattern:
-  awk '/^ERROR/ {print}' log.txt
-  
-  # Lines ending with pattern:
-  awk '/failed$/ {print}' log.txt
-  
-  # Multiple patterns (OR):
-  awk '/ERROR/ || /WARNING/ {print}' log.txt
+  # Lines with ERROR but NOT containing "ignore":
+  awk '/ERROR/ && !/ignore/ {print}' log
 
 Real-world examples:
-  # Extract IPs from access log for 404 errors:
-  awk '/404/ {print $1}' access.log | sort | uniq
+  # Failed SSH logins only (not other SSH events):
+  awk '/sshd/ && /Failed password/ {print}' /var/log/auth.log
   
-  # Find users who logged in today:
-  awk -F: '/login/ && /2025-01-14/ {print $3}' auth.log
+  # Apache 500 errors for specific domain:
+  awk '/example.com/ && /500/ {print}' /var/log/apache/access.log
   
-  # Extract ERROR messages with usernames:
-  awk '/ERROR/ {sub(/user=/, "", $4); print $1, $4}' app.log
+  # Successful logins during business hours:
+  awk '/login/ && /success/ && /09:|10:|11:|12:|13:|14:|15:|16:|17:/ {print}' app.log
 
 Verification:
   cat results/failed-users.txt
   # Should show:
   # charlie
   # charlie
+  # (no eve, because her failure was file_upload, not login)
 
 EOF
 }
