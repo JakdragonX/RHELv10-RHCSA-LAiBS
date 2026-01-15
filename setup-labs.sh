@@ -22,7 +22,7 @@ if [ "$EUID" -eq 0 ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BIN_DIR="/usr/local/bin"
+BIN_DIR="/usr/bin"
 
 echo ""
 print_color "$CYAN" "═══════════════════════════════════════════════════════"
