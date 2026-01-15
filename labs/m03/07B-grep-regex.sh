@@ -56,11 +56,11 @@ Connection from 192.168.1.20 accepted
 Connection from 10.0.0.5 rejected
 Connection from 192.168.1.100 timeout
 Connection from 172.16.0.50 accepted
-Connection from 192.168.2.15 accepted
 Connection from 10.0.0.10 rejected
-Connection from 192.168.1.10 closed
-Connection from 8.8.8.8 external accepted
-Connection from 1.1.1.1 external accepted
+Connection from 192.168.2.15 closed
+Connection from 172.16.0.60 closed
+Incoming connection 8.8.8.8 external accepted
+Incoming connection 1.1.1.1 external accepted
 EOF
 
     # Create config files with various patterns
