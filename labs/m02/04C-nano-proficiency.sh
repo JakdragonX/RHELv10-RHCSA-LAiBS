@@ -5,7 +5,7 @@
 # RHCSA Objective: Use text editors to create and edit files
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lab-runner.sh"
+source "${SCRIPT_DIR}/../../lab-runner.sh"
 
 LAB_NAME="Nano Editor Proficiency"
 LAB_DIFFICULTY="Intermediate"
