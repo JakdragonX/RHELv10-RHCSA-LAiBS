@@ -1,5 +1,5 @@
 #!/bin/bash
-# labs/12-grep-regex.sh
+# labs/07B-grep-regex.sh
 # Lab: grep and Regular Expressions
 # Difficulty: Intermediate
 # RHCSA Objective: Search for patterns using grep and regex
