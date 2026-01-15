@@ -24,6 +24,139 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="/usr/bin"
 
+# Uninstall function
+uninstall() {
+    echo ""
+    print_color "$CYAN" "═══════════════════════════════════════════════════════"
+    print_color "$CYAN" "  RHCSA Lab Uninstall"
+    print_color "$CYAN" "═══════════════════════════════════════════════════════"
+    echo ""
+    
+    print_color "$YELLOW" "This will remove:"
+    echo "  • All rhcsa-lab-* commands from $BIN_DIR"
+    echo "  • rhcsa-progress command from $BIN_DIR"
+    echo "  • Commands from /usr/local/bin (if any)"
+    echo ""
+    print_color "$RED" "This will NOT remove:"
+    echo "  • Your lab files in $SCRIPT_DIR"
+    echo "  • Your progress file (lab_progress.txt)"
+    echo ""
+    
+    read -p "Continue with uninstall? (y/n) " -r
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_color "$CYAN" "Uninstall cancelled"
+        exit 0
+    fi
+    
+    # Get sudo access
+    print_color "$YELLOW" "Getting sudo access..."
+    if ! sudo -v; then
+        print_color "$RED" "Failed to get sudo access"
+        exit 1
+    fi
+    
+    echo ""
+    echo "Removing commands..."
+    
+    local removed=0
+    
+    # Remove from /usr/bin
+    if ls "$BIN_DIR"/rhcsa-* >/dev/null 2>&1; then
+        for cmd in "$BIN_DIR"/rhcsa-*; do
+            if [ -f "$cmd" ]; then
+                sudo rm "$cmd"
+                echo "  ✓ Removed $(basename "$cmd")"
+                ((removed++))
+            fi
+        done
+    fi
+    
+    # Also check /usr/local/bin
+    if ls /usr/local/bin/rhcsa-* >/dev/null 2>&1; then
+        for cmd in /usr/local/bin/rhcsa-*; do
+            if [ -f "$cmd" ]; then
+                sudo rm "$cmd"
+                echo "  ✓ Removed $(basename "$cmd") (from /usr/local/bin)"
+                ((removed++))
+            fi
+        done
+    fi
+    
+    echo ""
+    if [ $removed -gt 0 ]; then
+        print_color "$GREEN" "✓ Removed $removed commands"
+    else
+        print_color "$YELLOW" "⚠ No commands found to remove"
+    fi
+    
+    echo ""
+    print_color "$CYAN" "═══════════════════════════════════════════════════════"
+    print_color "$GREEN" "Uninstall Complete!"
+    print_color "$CYAN" "═══════════════════════════════════════════════════════"
+    echo ""
+    print_color "$CYAN" "Your lab files are still at: $SCRIPT_DIR"
+    echo ""
+    print_color "$YELLOW" "To completely remove everything:"
+    echo "  cd .."
+    echo "  rm -rf $(basename "$SCRIPT_DIR")"
+    echo ""
+}
+
+# Show usage
+show_usage() {
+    cat << EOF
+RHCSA Lab Setup Script
+
+USAGE:
+    bash setup-labs.sh [OPTION]
+
+OPTIONS:
+    (no option)      Install lab commands and framework
+    --uninstall, -u  Remove all lab commands from system
+    --help, -h       Show this help message
+
+EXAMPLES:
+    bash setup-labs.sh           # Install
+    bash setup-labs.sh --uninstall   # Uninstall
+
+WHAT IT DOES:
+    Install:
+      • Fixes script line endings (if dos2unix available)
+      • Sets executable permissions
+      • Creates rhcsa-progress command
+      • Creates rhcsa-lab-XX commands for all labs
+
+    Uninstall:
+      • Removes all rhcsa-* commands
+      • Keeps your lab files and progress
+
+EOF
+}
+
+# Parse arguments
+case "${1:-}" in
+    --uninstall|-u)
+        uninstall
+        exit 0
+        ;;
+    --help|-h)
+        show_usage
+        exit 0
+        ;;
+    "")
+        # Continue with installation
+        ;;
+    *)
+        print_color "$RED" "Unknown option: $1"
+        echo ""
+        show_usage
+        exit 1
+        ;;
+esac
+
+esac
+
+# Installation starts here
 echo ""
 print_color "$CYAN" "═══════════════════════════════════════════════════════"
 print_color "$CYAN" "  RHCSA Lab Setup"
