@@ -312,9 +312,6 @@ WRAPPER_EOF
 create_lab_wrappers() {
     print_step "Creating convenience commands for labs..."
     
-    # Refresh sudo credentials before this section
-    sudo -v
-    
     # Check if labs directory exists
     if [ ! -d "$LAB_HOME/labs" ]; then
         print_warning "No 'labs' directory found - skipping wrapper creation"
@@ -335,24 +332,20 @@ create_lab_wrappers() {
     print_color "$CYAN" "  Found $lab_count lab scripts to process..."
     echo ""
     
-    # Collect all lab files into an array to avoid stdin issues
+    # Create a temporary directory for all wrapper scripts
+    local wrapper_dir=$(mktemp -d)
+    
+    # Collect all lab files and create wrappers (NO sudo yet)
     local lab_files=()
-    echo "  DEBUG: Searching for lab files..."
     while IFS= read -r -d '' lab_file; do
-        echo "  DEBUG: Found: $lab_file"
         lab_files+=("$lab_file")
     done < <(find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" -print0 2>/dev/null)
     
-    echo "  DEBUG: Total files collected in array: ${#lab_files[@]}"
-    echo ""
-    
+    echo "  Creating wrapper scripts..."
     local created=0
-    local failed=0
     
-    # Process each lab file - create wrapper script
-    echo "  DEBUG: Starting loop over array..."
+    # First pass: Create all wrapper scripts in temp directory
     for lab_file in "${lab_files[@]}"; do
-        echo "  DEBUG: Processing: $lab_file"
         [ -z "$lab_file" ] && continue
         [ ! -f "$lab_file" ] && continue
         
@@ -362,55 +355,37 @@ create_lab_wrappers() {
         if [[ $lab_basename =~ ^([0-9]{2}[A-Z]?)-.*\.sh$ ]]; then
             local lab_id="${BASH_REMATCH[1]}"
             local cmd_name="rhcsa-lab-${lab_id}"
-            local target_script="$BIN_DIR/$cmd_name"
             local lab_dir=$(dirname "$lab_file")
             
-            # Show progress
-            echo -n "  Creating $cmd_name... "
-            
-            # Create a temporary wrapper script
-            local wrapper_temp=$(mktemp)
-            cat > "$wrapper_temp" << WRAPPER_EOF
+            # Create wrapper in temp directory
+            cat > "$wrapper_dir/$cmd_name" << WRAPPER_EOF
 #!/bin/bash
 # Wrapper for ${lab_basename}
 cd "${lab_dir}" || exit 1
 exec "./${lab_basename}" "\$@"
 WRAPPER_EOF
             
-            # Make temp file executable first
-            chmod +x "$wrapper_temp" 2>/dev/null
-            
-            # Copy to target location with sudo
-            # Use explicit /dev/null for stdin and suppress output
-            if sudo -n cp "$wrapper_temp" "$target_script" </dev/null >/dev/null 2>&1; then
-                sudo -n chmod +x "$target_script" </dev/null >/dev/null 2>&1
-                echo "✓"
-                ((created++))
-            else
-                echo "✗ (permission denied)"
-                ((failed++))
-            fi
-            
-            rm -f "$wrapper_temp"
+            chmod +x "$wrapper_dir/$cmd_name"
+            echo "  ✓ Prepared: $cmd_name"
+            ((created++))
         fi
     done
     
     echo ""
+    echo "  Installing $created commands to $BIN_DIR..."
     
-    if [ $created -gt 0 ]; then
-        print_success "Created $created lab command shortcuts!"
-    fi
-    
-    if [ $failed -gt 0 ]; then
-        print_warning "Failed to create $failed commands (check sudo permissions)"
-    fi
-    
-    if [ $created -eq 0 ]; then
-        print_error "No lab commands were created"
-        print_color "$YELLOW" "  Try running: sudo -v"
-        print_color "$YELLOW" "  Then re-run this script"
+    # Second pass: ONE sudo operation to copy everything
+    if sudo cp "$wrapper_dir"/rhcsa-lab-* "$BIN_DIR/" 2>/dev/null; then
+        print_success "Installed $created lab command shortcuts!"
+    else
+        print_error "Failed to install commands to $BIN_DIR"
+        print_color "$YELLOW" "  Try manually: sudo cp $wrapper_dir/rhcsa-lab-* $BIN_DIR/"
+        rm -rf "$wrapper_dir"
         return 1
     fi
+    
+    # Cleanup temp directory
+    rm -rf "$wrapper_dir"
     
     echo ""
     print_color "$CYAN" "  You can now run labs with commands like:"
