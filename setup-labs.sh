@@ -250,11 +250,14 @@ create_lab_wrappers() {
         return 0
     fi
     
-    # Count lab scripts
-    local lab_count=$(find "$SCRIPT_DIR/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null | wc -l)
+    # Count lab scripts (only in module subdirectories, exclude templates)
+    local lab_count=$(find "$SCRIPT_DIR/labs" -type f -path "*/m[0-9][0-9]/*" -name "[0-9][0-9]*-*.sh" 2>/dev/null | wc -l)
     
     if [ "$lab_count" -eq 0 ]; then
-        print_warning "No numbered lab scripts found in labs/ directory"
+        print_warning "No numbered lab scripts found in labs/mXX/ directories"
+        echo ""
+        print_color "$YELLOW" "  Labs should be in module directories: labs/m02/, labs/m03/, etc."
+        print_color "$YELLOW" "  Filename format: XX-topic.sh or XXY-topic.sh"
         return 0
     fi
     
@@ -264,11 +267,11 @@ create_lab_wrappers() {
     # Create a temporary directory for all wrapper scripts
     local wrapper_dir=$(mktemp -d)
     
-    # Collect all lab files
+    # Collect all lab files (ONLY from module subdirectories)
     local lab_files=()
     while IFS= read -r -d '' lab_file; do
         lab_files+=("$lab_file")
-    done < <(find "$SCRIPT_DIR/labs" -type f -name "[0-9][0-9]*-*.sh" -print0 2>/dev/null)
+    done < <(find "$SCRIPT_DIR/labs" -type f -path "*/m[0-9][0-9]/*" -name "[0-9][0-9]*-*.sh" -print0 2>/dev/null)
     
     echo "  Creating wrapper scripts..."
     local created=0
