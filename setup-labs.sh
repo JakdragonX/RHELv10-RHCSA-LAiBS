@@ -332,13 +332,15 @@ create_lab_wrappers() {
     print_color "$CYAN" "  Found $lab_count lab scripts to process..."
     echo ""
     
-    # Store all lab files in a temp file to process
-    local temp_list=$(mktemp)
-    find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" 2>/dev/null > "$temp_list"
+    # Store all lab files in an array (not a file/pipe to avoid stdin issues with sudo)
+    local lab_files=()
+    while IFS= read -r -d '' lab_file; do
+        lab_files+=("$lab_file")
+    done < <(find "$LAB_HOME/labs" -type f -name "[0-9][0-9]*-*.sh" -print0 2>/dev/null)
     
     local created=0
     # Process each lab file - create wrapper script
-    while IFS= read -r lab_file; do
+    for lab_file in "${lab_files[@]}"; do
         [ -z "$lab_file" ] && continue
         [ ! -f "$lab_file" ] && continue
         
@@ -364,17 +366,16 @@ WRAPPER_EOF
             chmod +x "$wrapper_temp"
             
             # Copy to target location with sudo (preserves permissions)
-            if sudo cp "$wrapper_temp" "$target_script"; then
-                sudo chmod +x "$target_script"
+            # Redirect stdin from /dev/null to prevent sudo from consuming it
+            if sudo cp "$wrapper_temp" "$target_script" < /dev/null; then
+                sudo chmod +x "$target_script" < /dev/null
                 echo "  ✓ Created: $cmd_name → $lab_basename"
                 ((created++))
             fi
             
             rm -f "$wrapper_temp"
         fi
-    done < "$temp_list"
-    
-    rm -f "$temp_list"
+    done
     
     echo ""
     print_success "Created $created lab command shortcuts!"
