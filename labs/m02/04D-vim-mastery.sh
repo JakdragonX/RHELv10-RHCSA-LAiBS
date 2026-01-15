@@ -5,7 +5,7 @@
 # RHCSA Objective: Use vim to create and edit text files
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lab-runner.sh"
+source "${SCRIPT_DIR}/../../lab-runner.sh"
 
 LAB_NAME="Vim Mastery and Real-World Text Editing"
 LAB_DIFFICULTY="Advanced"
