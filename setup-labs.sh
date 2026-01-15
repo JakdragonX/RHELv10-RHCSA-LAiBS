@@ -13,22 +13,33 @@ readonly NC='\033[0m'
 
 print_color() { echo -e "${1}${2}${NC}"; }
 
+# Must run as regular user (not root)
+if [ "$EUID" -eq 0 ]; then
+    print_color "$RED" "ERROR: Do not run as root"
+    echo "Run as regular user: bash setup-labs.sh"
+    echo "The script will prompt for sudo when needed."
+    exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="/usr/local/bin"
 
 echo ""
 print_color "$CYAN" "═══════════════════════════════════════════════════════"
-print_color "$CYAN" "  RHCSA Lab Setup (Simplified)"
+print_color "$CYAN" "  RHCSA Lab Setup"
 print_color "$CYAN" "═══════════════════════════════════════════════════════"
 echo ""
 echo "Working directory: $SCRIPT_DIR"
 echo ""
 
-# Check sudo
-if [ "$EUID" -ne 0 ]; then
-    print_color "$YELLOW" "Getting sudo access..."
-    sudo -v || { print_color "$RED" "Failed to get sudo"; exit 1; }
+# Get sudo access upfront
+print_color "$YELLOW" "This script needs sudo access..."
+if ! sudo -v; then
+    print_color "$RED" "Failed to get sudo access"
+    exit 1
 fi
+print_color "$GREEN" "✓ Sudo access obtained"
+echo ""
 
 # 1. Fix line endings if dos2unix available
 if command -v dos2unix &>/dev/null; then
@@ -45,15 +56,14 @@ find "$SCRIPT_DIR" -name "*.sh" -exec chmod +x {} \;
 print_color "$GREEN" "✓ Permissions set"
 
 # 3. Install rhcsa-progress
-echo ""
 echo "Installing rhcsa-progress..."
-cat > "$BIN_DIR/rhcsa-progress" << 'EOF'
+sudo bash -c "cat > '$BIN_DIR/rhcsa-progress'" << 'EOF'
 #!/bin/bash
 cd "SCRIPT_DIR_PLACEHOLDER" || exit 1
 exec bash "./track-progress.sh" "$@"
 EOF
-sed -i "s|SCRIPT_DIR_PLACEHOLDER|$SCRIPT_DIR|g" "$BIN_DIR/rhcsa-progress"
-chmod +x "$BIN_DIR/rhcsa-progress"
+sudo sed -i "s|SCRIPT_DIR_PLACEHOLDER|$SCRIPT_DIR|g" "$BIN_DIR/rhcsa-progress"
+sudo chmod +x "$BIN_DIR/rhcsa-progress"
 print_color "$GREEN" "✓ Installed rhcsa-progress"
 
 # 4. Create lab wrappers using a completely different approach
@@ -104,6 +114,15 @@ sudo cp "$TEMP_DIR"/rhcsa-lab-* "$BIN_DIR/"
 rm -rf "$TEMP_DIR"
 
 print_color "$GREEN" "✓ Installed $WRAPPER_COUNT lab commands"
+
+# Show what's in one wrapper for verification
+echo ""
+print_color "$CYAN" "Verifying wrapper (showing rhcsa-lab-03A):"
+echo "─────────────────────────────────────────"
+cat "$BIN_DIR/rhcsa-lab-03A" 2>/dev/null || echo "Wrapper not found!"
+echo "─────────────────────────────────────────"
+echo ""
+print_color "$YELLOW" "The 'cd' path above should be: $SCRIPT_DIR/labs/m02"
 
 # 5. Show completion
 echo ""
