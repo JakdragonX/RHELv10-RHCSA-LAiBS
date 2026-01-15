@@ -58,25 +58,40 @@ uninstall() {
     echo ""
     echo "Removing commands..."
     
-    # Get list before deletion for display
-    local cmd_list=$(ls "$BIN_DIR"/rhcsa-* 2>/dev/null | xargs -n1 basename 2>/dev/null || true)
-    local local_list=$(ls /usr/local/bin/rhcsa-* 2>/dev/null | xargs -n1 basename 2>/dev/null || true)
+    local removed=0
     
-    # Delete all at once (simple and reliable)
+    # Capture list of commands BEFORE deletion (from /usr/bin)
+    local cmd_list=""
+    if ls "$BIN_DIR"/rhcsa-* >/dev/null 2>&1; then
+        cmd_list=$(ls "$BIN_DIR"/rhcsa-* 2>/dev/null | xargs -n1 basename 2>/dev/null || true)
+    fi
+    
+    # Capture list from /usr/local/bin
+    local local_list=""
+    if ls /usr/local/bin/rhcsa-* >/dev/null 2>&1; then
+        local_list=$(ls /usr/local/bin/rhcsa-* 2>/dev/null | xargs -n1 basename 2>/dev/null || true)
+    fi
+    
+    # NOW delete everything
     sudo rm -f "$BIN_DIR"/rhcsa-* 2>/dev/null || true
     sudo rm -f /usr/local/bin/rhcsa-* 2>/dev/null || true
     
-    # Show what was removed
-    local removed=0
+    # Display what was removed
     if [ -n "$cmd_list" ]; then
         while IFS= read -r cmd_name; do
-            [ -n "$cmd_name" ] && echo "  ✓ Removed $cmd_name" && ((removed++))
+            if [ -n "$cmd_name" ]; then
+                echo "  ✓ Removed $cmd_name"
+                ((removed++))
+            fi
         done <<< "$cmd_list"
     fi
     
     if [ -n "$local_list" ]; then
         while IFS= read -r cmd_name; do
-            [ -n "$cmd_name" ] && echo "  ✓ Removed $cmd_name (from /usr/local/bin)" && ((removed++))
+            if [ -n "$cmd_name" ]; then
+                echo "  ✓ Removed $cmd_name (from /usr/local/bin)"
+                ((removed++))
+            fi
         done <<< "$local_list"
     fi
     
