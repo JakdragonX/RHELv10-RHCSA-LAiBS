@@ -58,28 +58,26 @@ uninstall() {
     echo ""
     echo "Removing commands..."
     
-    local removed=0
+    # Get list before deletion for display
+    local cmd_list=$(ls "$BIN_DIR"/rhcsa-* 2>/dev/null | xargs -n1 basename 2>/dev/null || true)
+    local local_list=$(ls /usr/local/bin/rhcsa-* 2>/dev/null | xargs -n1 basename 2>/dev/null || true)
     
-    # Remove from /usr/bin
-    if ls "$BIN_DIR"/rhcsa-* >/dev/null 2>&1; then
-        for cmd in "$BIN_DIR"/rhcsa-*; do
-            if [ -f "$cmd" ]; then
-                sudo rm "$cmd"
-                echo "  ✓ Removed $(basename "$cmd")"
-                ((removed++))
-            fi
-        done
+    # Delete all at once (simple and reliable)
+    sudo rm -f "$BIN_DIR"/rhcsa-* 2>/dev/null || true
+    sudo rm -f /usr/local/bin/rhcsa-* 2>/dev/null || true
+    
+    # Show what was removed
+    local removed=0
+    if [ -n "$cmd_list" ]; then
+        while IFS= read -r cmd_name; do
+            [ -n "$cmd_name" ] && echo "  ✓ Removed $cmd_name" && ((removed++))
+        done <<< "$cmd_list"
     fi
     
-    # Also check /usr/local/bin
-    if ls /usr/local/bin/rhcsa-* >/dev/null 2>&1; then
-        for cmd in /usr/local/bin/rhcsa-*; do
-            if [ -f "$cmd" ]; then
-                sudo rm "$cmd"
-                echo "  ✓ Removed $(basename "$cmd") (from /usr/local/bin)"
-                ((removed++))
-            fi
-        done
+    if [ -n "$local_list" ]; then
+        while IFS= read -r cmd_name; do
+            [ -n "$cmd_name" ] && echo "  ✓ Removed $cmd_name (from /usr/local/bin)" && ((removed++))
+        done <<< "$local_list"
     fi
     
     echo ""
@@ -152,8 +150,6 @@ case "${1:-}" in
         show_usage
         exit 1
         ;;
-esac
-
 esac
 
 # Installation starts here
