@@ -142,17 +142,37 @@ run_validation() {
         
         # Track progress if validation function exported score variables
         if [ -n "${VALIDATION_SCORE:-}" ] && [ -n "${VALIDATION_TOTAL:-}" ]; then
-            # Construct absolute path to progress tracker
-            local tracker_path="${SCRIPT_DIR}/../track-progress.sh"
+            # Find lab-runner.sh location (where this framework is)
+            local framework_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            local tracker_path="${framework_dir}/track-progress.sh"
+            
+            # Debug output (can be removed later)
+            if [ "${DEBUG_LAB:-}" = "1" ]; then
+                echo ""
+                echo "DEBUG: Framework dir: $framework_dir"
+                echo "DEBUG: Tracker path: $tracker_path"
+                echo "DEBUG: Tracker exists: $([ -f "$tracker_path" ] && echo "YES" || echo "NO")"
+                echo "DEBUG: LAB_NAME: $LAB_NAME"
+                echo "DEBUG: VALIDATION_SCORE: $VALIDATION_SCORE"
+                echo "DEBUG: VALIDATION_TOTAL: $VALIDATION_TOTAL"
+            fi
             
             # Check if tracker exists
             if [ -f "$tracker_path" ]; then
-                # Use absolute path and suppress stderr
-                (cd "${SCRIPT_DIR}/.." && bash ./track-progress.sh --record "$LAB_NAME" "$VALIDATION_SCORE" "$VALIDATION_TOTAL") 2>/dev/null || true
+                # Call track-progress.sh with proper path
+                bash "$tracker_path" --record "$LAB_NAME" "$VALIDATION_SCORE" "$VALIDATION_TOTAL" || true
                 
-                # Show a subtle confirmation
+                # Show confirmation with actual file location
                 echo ""
-                print_color "$CYAN" "📊 Progress recorded in $(cd "${SCRIPT_DIR}/.." && pwd)/lab_progress.txt"
+                print_color "$CYAN" "📊 Progress recorded in ${framework_dir}/lab_progress.txt"
+            else
+                # Show warning if tracker not found (only in debug mode)
+                if [ "${DEBUG_LAB:-}" = "1" ]; then
+                    echo ""
+                    print_color "$YELLOW" "⚠ Progress tracker not found at: $tracker_path"
+                    echo "   Progress will not be recorded."
+                    echo "   Make sure track-progress.sh is in the same directory as lab-runner.sh"
+                fi
             fi
         fi
         
@@ -177,7 +197,6 @@ show_solution() {
     echo ""
 }
 
-# Interactive Mode
 # Interactive Mode - Enhanced with command execution
 run_interactive() {
     print_header "Interactive Mode - Step by Step"
@@ -385,6 +404,9 @@ EXAMPLES:
     sudo ./01-user-management.sh -v        # Check your work
     ./01-user-management.sh -o             # Quick objectives list
     sudo ./01-user-management.sh -s        # View solution
+
+DEBUG MODE:
+    DEBUG_LAB=1 sudo ./lab-name.sh -v      # Show debug info for tracking
 
 EOF
 }
