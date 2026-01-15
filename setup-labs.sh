@@ -76,23 +76,16 @@ uninstall() {
     sudo rm -f "$BIN_DIR"/rhcsa-* 2>/dev/null || true
     sudo rm -f /usr/local/bin/rhcsa-* 2>/dev/null || true
     
-    # Display what was removed
+    # Display what was removed (avoid loops entirely)
     if [ -n "$cmd_list" ]; then
-        while IFS= read -r cmd_name; do
-            if [ -n "$cmd_name" ]; then
-                echo "  ✓ Removed $cmd_name"
-                ((removed++))
-            fi
-        done <<< "$cmd_list"
+        echo "$cmd_list" | sed 's/^/  ✓ Removed /'
+        removed=$(echo "$cmd_list" | wc -l)
     fi
     
     if [ -n "$local_list" ]; then
-        while IFS= read -r cmd_name; do
-            if [ -n "$cmd_name" ]; then
-                echo "  ✓ Removed $cmd_name (from /usr/local/bin)"
-                ((removed++))
-            fi
-        done <<< "$local_list"
+        echo "$local_list" | sed 's/^/  ✓ Removed /' | sed 's/$/ (from \/usr\/local\/bin)/'
+        local local_count=$(echo "$local_list" | wc -l)
+        removed=$((removed + local_count))
     fi
     
     echo ""
