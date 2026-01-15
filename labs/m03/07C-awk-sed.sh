@@ -1,5 +1,5 @@
 #!/bin/bash
-# labs/07C-awk-sed.sh
+# labs/13-awk-sed.sh
 # Lab: Advanced Text Processing (awk and sed)
 # Difficulty: Intermediate
 # RHCSA Objective: Use awk and sed for text processing
@@ -424,7 +424,7 @@ EOF
 }
 
 hint_step_2() {
-    echo "  Use awk with -F, (comma), filter $2 > 100, print $1 and $2, skip NR > 1"
+    echo "  Use awk with -F, (comma), filter \$2 > 100, print \$1 and \$2, skip NR > 1"
 }
 
 # STEP 2: Filter high-value products
@@ -598,7 +598,7 @@ EOF
 }
 
 hint_step_3() {
-    echo "  Use awk with /status:failed/, print $3, then use sed or cut to remove 'user:'"
+    echo "  Use awk with /status:failed/, print \$3, then use sed or cut to remove 'user:'"
 }
 
 # STEP 3: Extract failed login users
