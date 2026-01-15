@@ -6,7 +6,7 @@
 
 # Source the lab framework
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lab-runner.sh"
+source "${SCRIPT_DIR}/../../lab-runner.sh"
 
 # Lab metadata
 LAB_NAME="Bash Scripting Fundamentals - Loops and Conditionals"
