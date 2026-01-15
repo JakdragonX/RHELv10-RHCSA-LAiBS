@@ -146,33 +146,56 @@ run_validation() {
             local framework_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
             local tracker_path="${framework_dir}/track-progress.sh"
             
-            # Debug output (can be removed later)
+            # Always show tracking debug info
+            echo ""
+            print_color "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            print_color "$CYAN" "📊 Progress Tracking"
+            print_color "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            
             if [ "${DEBUG_LAB:-}" = "1" ]; then
-                echo ""
                 echo "DEBUG: Framework dir: $framework_dir"
                 echo "DEBUG: Tracker path: $tracker_path"
                 echo "DEBUG: Tracker exists: $([ -f "$tracker_path" ] && echo "YES" || echo "NO")"
                 echo "DEBUG: LAB_NAME: $LAB_NAME"
                 echo "DEBUG: VALIDATION_SCORE: $VALIDATION_SCORE"
                 echo "DEBUG: VALIDATION_TOTAL: $VALIDATION_TOTAL"
+                echo ""
             fi
             
             # Check if tracker exists
             if [ -f "$tracker_path" ]; then
-                # Call track-progress.sh with proper path
-                bash "$tracker_path" --record "$LAB_NAME" "$VALIDATION_SCORE" "$VALIDATION_TOTAL" || true
-                
-                # Show confirmation with actual file location
-                echo ""
-                print_color "$CYAN" "📊 Progress recorded in ${framework_dir}/lab_progress.txt"
-            else
-                # Show warning if tracker not found (only in debug mode)
-                if [ "${DEBUG_LAB:-}" = "1" ]; then
-                    echo ""
-                    print_color "$YELLOW" "⚠ Progress tracker not found at: $tracker_path"
-                    echo "   Progress will not be recorded."
-                    echo "   Make sure track-progress.sh is in the same directory as lab-runner.sh"
+                # Call track-progress.sh with proper path (DON'T suppress errors)
+                echo "Recording progress..."
+                if bash "$tracker_path" --record "$LAB_NAME" "$VALIDATION_SCORE" "$VALIDATION_TOTAL"; then
+                    # Show confirmation with actual file location
+                    print_color "$GREEN" "✓ Progress recorded successfully"
+                    echo "  Location: ${framework_dir}/lab_progress.txt"
+                    echo "  View progress: ./track-progress.sh --summary"
+                else
+                    print_color "$YELLOW" "⚠ Failed to record progress (exit code: $?)"
+                    echo "  This won't affect your lab results."
+                    if [ "${DEBUG_LAB:-}" != "1" ]; then
+                        echo "  Run with DEBUG_LAB=1 to see details."
+                    fi
                 fi
+            else
+                print_color "$YELLOW" "⚠ Progress tracker not found"
+                echo "  Expected: $tracker_path"
+                echo "  Progress will not be recorded."
+                echo ""
+                echo "  To enable tracking:"
+                echo "    1. Make sure track-progress.sh is in the same directory as lab-runner.sh"
+                echo "    2. Expected location: $framework_dir"
+            fi
+            print_color "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        else
+            # Lab didn't export variables
+            if [ "${DEBUG_LAB:-}" = "1" ]; then
+                echo ""
+                print_color "$YELLOW" "⚠ DEBUG: Lab did not export VALIDATION_SCORE/VALIDATION_TOTAL"
+                echo "  Progress tracking requires these exports in validate() function:"
+                echo "    export VALIDATION_SCORE=\$score"
+                echo "    export VALIDATION_TOTAL=\$total"
             fi
         fi
         
