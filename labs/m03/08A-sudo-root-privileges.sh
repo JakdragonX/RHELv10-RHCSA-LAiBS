@@ -129,6 +129,359 @@ EOF
 }
 
 #############################################################################
+# INTERACTIVE MODE SUPPORT
+#############################################################################
+
+# Return the number of steps in interactive mode
+get_step_count() {
+    echo "4"
+}
+
+# Context shown once at the start of interactive mode
+scenario_context() {
+    cat << 'EOF'
+You're configuring administrative access for three employees at DevOps Solutions Inc.
+Alice needs full sudo access, Bob needs limited user management access, and Charlie
+needs read-only system monitoring access. You'll configure each user's permissions
+using sudo best practices.
+
+Test users have been created with password: test123
+EOF
+}
+
+# STEP 1: Grant alice full admin access
+show_step_1() {
+    cat << 'EOF'
+TASK: Grant alice full administrative access using the wheel group
+
+Alice is your senior administrator and needs unrestricted sudo access to manage
+all aspects of the system. The proper way to grant full sudo access in RHEL is
+by adding the user to the wheel group.
+
+What to do:
+  • Add alice to the wheel group
+  • Use the -aG flags to append (don't replace existing groups)
+
+Tools available:
+  • usermod - Modify user account properties
+  • groups - Display group memberships
+
+Think about:
+  • Why use wheel instead of creating custom sudo rules?
+  • What does the -aG flag do differently than -G?
+
+After completing: Open a new terminal and try: sudo -l -U alice
+EOF
+}
+
+validate_step_1() {
+    if groups alice 2>/dev/null | grep -q "\bwheel\b"; then
+        return 0
+    else
+        echo ""
+        print_color "$RED" "✗ alice is not in wheel group"
+        echo "  Try: sudo usermod -aG wheel alice"
+        return 1
+    fi
+}
+
+solution_step_1() {
+    cat << 'EOF'
+
+SOLUTION:
+─────────
+Command:
+  sudo usermod -aG wheel alice
+
+Explanation:
+  • usermod: Command to modify user accounts
+  • -aG: Append to group (keeps existing group memberships)
+  • wheel: The administrative group with full sudo access
+  • alice: The user to modify
+
+Why this matters:
+  The wheel group is the standard way to grant full administrative access
+  in RHEL. The /etc/sudoers file contains "%wheel ALL=(ALL) ALL" by default,
+  granting all members complete sudo privileges.
+
+Verification:
+  groups alice
+  # Expected: alice : alice wheel
+  
+  sudo -l -U alice
+  # Should show: (ALL) ALL
+
+EOF
+}
+
+hint_step_2() {
+    echo "  Create the file with: sudo visudo -f /etc/sudoers.d/bob-permissions"
+    echo "  Use absolute paths for commands (find with: which useradd)"
+}
+
+# STEP 2: Configure bob's limited access
+show_step_2() {
+    cat << 'EOF'
+TASK: Configure limited sudo access for bob to manage user accounts
+
+Bob is a junior administrator who needs to create and manage user accounts,
+but should not be able to change the root password for security reasons.
+
+What to do:
+  • Create /etc/sudoers.d/bob-permissions using visudo
+  • Allow bob to run: useradd, userdel, passwd
+  • Explicitly deny: passwd root (use ! to negate)
+  • Use absolute paths (e.g., /usr/sbin/useradd)
+
+Tools available:
+  • visudo -f /etc/sudoers.d/bob-permissions - Safely edit sudo config
+  • which command - Find absolute path to a command
+
+Format:
+  username ALL=/full/path/to/cmd1, /full/path/to/cmd2, ! /full/path/to/denied
+
+After completing: Test with: sudo -l -U bob
+
+IMPORTANT: Always use visudo to prevent syntax errors that could lock you out!
+EOF
+}
+
+validate_step_2() {
+    if [ ! -f /etc/sudoers.d/bob-permissions ]; then
+        echo ""
+        print_color "$RED" "✗ File /etc/sudoers.d/bob-permissions not found"
+        echo "  Create with: sudo visudo -f /etc/sudoers.d/bob-permissions"
+        return 1
+    fi
+    
+    local checks=0
+    
+    if sudo -l -U bob 2>/dev/null | grep -q "useradd"; then
+        ((checks++))
+    fi
+    
+    if sudo -l -U bob 2>/dev/null | grep -q "userdel"; then
+        ((checks++))
+    fi
+    
+    if sudo -l -U bob 2>/dev/null | grep -q "passwd"; then
+        ((checks++))
+    fi
+    
+    if [ $checks -ge 3 ]; then
+        return 0
+    else
+        echo ""
+        print_color "$RED" "✗ bob's sudo configuration incomplete"
+        echo "  Expected: useradd, userdel, passwd (with passwd root denied)"
+        return 1
+    fi
+}
+
+solution_step_2() {
+    cat << 'EOF'
+
+SOLUTION:
+─────────
+Command:
+  sudo visudo -f /etc/sudoers.d/bob-permissions
+
+Add this line:
+  bob ALL=/usr/sbin/useradd, /usr/sbin/userdel, /usr/bin/passwd, ! /usr/bin/passwd root
+
+Explanation:
+  • bob ALL=: bob can run these from any host
+  • /usr/sbin/useradd: Full path to useradd command
+  • /usr/sbin/userdel: Full path to userdel command
+  • /usr/bin/passwd: Full path to passwd command
+  • ! /usr/bin/passwd root: Explicitly deny changing root password
+
+Why this matters:
+  Using drop-in files in /etc/sudoers.d/ is safer than editing /etc/sudoers
+  directly. System updates won't overwrite your custom configurations, and
+  you can easily disable permissions by removing the file.
+
+Verification:
+  sudo -l -U bob
+  # Should list the allowed commands
+
+EOF
+}
+
+hint_step_3() {
+    echo "  Use NOPASSWD: before the command list"
+    echo "  Format: username ALL=NOPASSWD: /path/cmd1, /path/cmd2"
+}
+
+# STEP 3: Configure charlie's monitoring access
+show_step_3() {
+    cat << 'EOF'
+TASK: Configure monitoring access for charlie without password prompts
+
+Charlie is in the monitoring team and needs to check system status frequently.
+To avoid constant password prompts for read-only commands, you'll use NOPASSWD.
+
+What to do:
+  • Create /etc/sudoers.d/charlie-permissions using visudo
+  • Allow charlie to run: systemctl status, journalctl, ps
+  • Use NOPASSWD: so charlie won't be prompted for password
+  • Use absolute paths for all commands
+
+Tools available:
+  • visudo -f /etc/sudoers.d/charlie-permissions
+  • which command - Find command paths
+
+Format:
+  username ALL=NOPASSWD: /path/to/cmd1, /path/to/cmd2
+
+After completing: Test with: sudo -l -U charlie
+
+Think about:
+  • Why is NOPASSWD safe for these specific commands?
+  • When should you NOT use NOPASSWD?
+EOF
+}
+
+validate_step_3() {
+    if [ ! -f /etc/sudoers.d/charlie-permissions ]; then
+        echo ""
+        print_color "$RED" "✗ File /etc/sudoers.d/charlie-permissions not found"
+        echo "  Create with: sudo visudo -f /etc/sudoers.d/charlie-permissions"
+        return 1
+    fi
+    
+    if sudo -l -U charlie 2>/dev/null | grep -q "NOPASSWD" && \
+       sudo -l -U charlie 2>/dev/null | grep -q "systemctl"; then
+        return 0
+    else
+        echo ""
+        print_color "$RED" "✗ charlie's configuration missing or lacks NOPASSWD"
+        echo "  Expected: NOPASSWD with systemctl, journalctl, ps"
+        return 1
+    fi
+}
+
+solution_step_3() {
+    cat << 'EOF'
+
+SOLUTION:
+─────────
+Command:
+  sudo visudo -f /etc/sudoers.d/charlie-permissions
+
+Add this line:
+  charlie ALL=NOPASSWD: /usr/bin/systemctl status *, /usr/bin/journalctl, /usr/bin/ps
+
+Explanation:
+  • NOPASSWD: Charlie won't be prompted for password
+  • /usr/bin/systemctl status *: Can check any service status
+  • /usr/bin/journalctl: Can view system logs
+  • /usr/bin/ps: Can view running processes
+
+Why this matters:
+  NOPASSWD is useful for read-only monitoring commands that need to run
+  frequently or automatically. These commands only display information and
+  cannot modify the system, making NOPASSWD relatively safe.
+
+WARNING: Never use NOPASSWD for commands that modify the system!
+
+Verification:
+  sudo -l -U charlie
+  # Should show NOPASSWD for the listed commands
+
+EOF
+}
+
+hint_step_4() {
+    echo "  Use: sudo usermod -aG developers username"
+    echo "  Remember -aG (append) not -G (replace)"
+}
+
+# STEP 4: Add users to developers group
+show_step_4() {
+    cat << 'EOF'
+TASK: Add bob and charlie to the developers group
+
+The developers group provides access to shared development resources.
+You need to add both bob and charlie to this group without removing
+their existing group memberships.
+
+What to do:
+  • Add bob to the developers group
+  • Add charlie to the developers group
+  • Use -aG to append (preserve existing groups)
+
+Tools available:
+  • usermod -aG group username - Add user to group
+  • groups username - Verify group memberships
+  • getent group developers - Show all group members
+
+Think about:
+  • What happens if you use -G instead of -aG?
+  • How can you verify the change worked?
+
+After completing: Run: groups bob charlie
+EOF
+}
+
+validate_step_4() {
+    local ok=true
+    
+    if ! groups bob 2>/dev/null | grep -q "\bdevelopers\b"; then
+        echo ""
+        print_color "$RED" "✗ bob is not in developers group"
+        ok=false
+    fi
+    
+    if ! groups charlie 2>/dev/null | grep -q "\bdevelopers\b"; then
+        echo ""
+        print_color "$RED" "✗ charlie is not in developers group"
+        ok=false
+    fi
+    
+    if [ "$ok" = true ]; then
+        return 0
+    else
+        echo "  Try: sudo usermod -aG developers bob"
+        echo "       sudo usermod -aG developers charlie"
+        return 1
+    fi
+}
+
+solution_step_4() {
+    cat << 'EOF'
+
+SOLUTION:
+─────────
+Commands:
+  sudo usermod -aG developers bob
+  sudo usermod -aG developers charlie
+
+Explanation:
+  • usermod: Modify user account
+  • -aG: Append to supplementary groups (keeps existing groups)
+  • developers: The group name
+  • bob/charlie: The users to modify
+
+Why this matters:
+  Using -aG (append) is critical! If you use -G alone, it REPLACES all
+  supplementary groups, potentially removing the user from important
+  groups. Always use -aG to add users to groups safely.
+
+Verification:
+  groups bob
+  # Expected: bob : bob developers
+  
+  groups charlie
+  # Expected: charlie : charlie developers
+  
+  getent group developers
+  # Expected: developers:x:####:bob,charlie
+
+EOF
+}
+
+#############################################################################
 # QUICK OBJECTIVES
 #############################################################################
 objectives_quick() {
