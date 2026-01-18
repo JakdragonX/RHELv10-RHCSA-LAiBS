@@ -28,7 +28,7 @@ setup_lab() {
     groupdel testers 2>/dev/null || true
     groupdel devops 2>/dev/null || true
     groupdel managers 2>/dev/null || true
-    rm -rf /opt/grouptest 2>/dev/null || true
+    rm -rf /tmp/grouptest 2>/dev/null || true
     
     # Create some test users
     useradd -m alice 2>/dev/null || true
@@ -37,7 +37,8 @@ setup_lab() {
     useradd -m dave 2>/dev/null || true
     
     # Create test directory
-    mkdir -p /opt/grouptest 2>/dev/null || true
+    mkdir -p /tmp/grouptest 2>/dev/null || true
+    chmod 777 /tmp/grouptest 2>/dev/null || true
     
     echo "  ✓ Created test users: alice, bob, charlie, dave"
     echo "  ✓ System ready for group management"
@@ -87,7 +88,7 @@ a primary group (stored in /etc/passwd) and can be a member of multiple secondar
 groups (stored in /etc/group). Understanding group membership is crucial for
 managing collaborative workspaces.
 
-LAB DIRECTORY: /opt/grouptest
+LAB DIRECTORY: /tmp/grouptest
   (Used for testing group ownership)
 
 OBJECTIVES:
@@ -100,7 +101,6 @@ OBJECTIVES:
   2. Add users to groups (secondary membership)
      • Add alice to developers group
      • Add bob to developers group
-     • Add charlie to testers group
      • Add alice to devops group (she's in multiple groups!)
      • Use usermod -aG (append to groups)
 
@@ -118,7 +118,8 @@ OBJECTIVES:
 
   5. Manage group with gpasswd
      • Add dave to developers using gpasswd
-     • Remove charlie from testers using gpasswd
+     • Add charlie to testers using gpasswd
+     • Then remove charlie from testers using gpasswd (practice both operations)
      • Create managers group and set administrators
      • Verify changes with getent
 
@@ -147,10 +148,10 @@ EOF
 objectives_quick() {
     cat << 'EOF'
   ☐ 1. Create groups: developers (3000), testers (3001), devops
-  ☐ 2. Add users to groups: alice→developers,devops; bob→developers; charlie→testers
+  ☐ 2. Add users to groups: alice→developers,devops; bob→developers
   ☐ 3. Verify membership with id, groups, and getent commands
   ☐ 4. Change alice's primary group to developers, test with newgrp
-  ☐ 5. Use gpasswd to add dave to developers, remove charlie from testers
+  ☐ 5. Use gpasswd: add dave to developers, add then remove charlie from testers
 EOF
 }
 
@@ -169,7 +170,7 @@ users as members, and understand the difference between primary and secondary
 group membership.
 
 Test users: alice, bob, charlie, dave
-Test directory: /opt/grouptest
+Test directory: /tmp/grouptest
 EOF
 }
 
@@ -290,6 +291,8 @@ EOF
 
 hint_step_2() {
     echo "  Use: sudo usermod -aG developers alice"
+    echo "  Then: sudo usermod -aG developers bob"
+    echo "  Then: sudo usermod -aG devops alice"
     echo "  Remember -aG (append) not -G (replace)!"
 }
 
@@ -304,7 +307,6 @@ be members of multiple secondary groups, but only one primary group.
 What to do:
   • Add alice to developers
   • Add bob to developers
-  • Add charlie to testers
   • Add alice to devops (yes, she's in multiple groups!)
 
 Tools available:
@@ -314,7 +316,6 @@ Tools available:
 Format:
   sudo usermod -aG developers alice
   sudo usermod -aG developers bob
-  sudo usermod -aG testers charlie
   sudo usermod -aG devops alice
 
 CRITICAL:
@@ -354,14 +355,6 @@ validate_step_2() {
         return 1
     fi
     
-    # Check charlie in testers
-    if ! id charlie 2>/dev/null | grep -q "testers"; then
-        echo ""
-        print_color "$RED" "✗ charlie is not in testers group"
-        echo "  Try: sudo usermod -aG testers charlie"
-        return 1
-    fi
-    
     return 0
 }
 
@@ -373,7 +366,6 @@ SOLUTION:
 Commands:
   sudo usermod -aG developers alice
   sudo usermod -aG developers bob
-  sudo usermod -aG testers charlie
   sudo usermod -aG devops alice
 
 Explanation:
@@ -560,8 +552,8 @@ Tools available:
 
 Test sequence:
   1. Change alice's primary group to developers
-  2. Create file: sudo -u alice touch /opt/grouptest/alice-new.txt
-  3. Check ownership: ls -l /opt/grouptest/alice-new.txt
+  2. Create file: sudo -u alice touch /tmp/grouptest/alice-new.txt
+  3. Check ownership: ls -l /tmp/grouptest/alice-new.txt
   4. File should now belong to developers group!
 
 Think about:
@@ -585,8 +577,8 @@ validate_step_4() {
     fi
     
     # Check if test file exists with correct group
-    if [ -f /opt/grouptest/alice-new.txt ]; then
-        local file_group=$(stat -c "%G" /opt/grouptest/alice-new.txt 2>/dev/null)
+    if [ -f /tmp/grouptest/alice-new.txt ]; then
+        local file_group=$(stat -c "%G" /tmp/grouptest/alice-new.txt 2>/dev/null)
         if [ "$file_group" != "developers" ]; then
             echo ""
             print_color "$YELLOW" "  Note: Test file has group $file_group (expected developers)"
@@ -603,8 +595,8 @@ SOLUTION:
 ─────────
 Commands:
   sudo usermod -g developers alice
-  sudo -u alice touch /opt/grouptest/alice-new.txt
-  ls -l /opt/grouptest/alice-new.txt
+  sudo -u alice touch /tmp/grouptest/alice-new.txt
+  ls -l /tmp/grouptest/alice-new.txt
 
 Explanation:
   • usermod -g: Changes primary group permanently
@@ -650,7 +642,8 @@ EOF
 
 hint_step_5() {
     echo "  Add user: sudo gpasswd -a dave developers"
-    echo "  Remove user: sudo gpasswd -d charlie testers"
+    echo "  Add charlie: sudo gpasswd -a charlie testers"
+    echo "  Remove charlie: sudo gpasswd -d charlie testers"
 }
 
 # STEP 5
@@ -663,7 +656,8 @@ useful for group administrators and batch operations.
 
 What to do:
   • Add dave to developers group using gpasswd
-  • Remove charlie from testers group using gpasswd
+  • Add charlie to testers group using gpasswd (first add him)
+  • Remove charlie from testers group using gpasswd (then remove to practice both)
   • Create managers group
   • Verify all changes with getent
 
@@ -675,6 +669,7 @@ Tools available:
 
 Format:
   sudo gpasswd -a dave developers
+  sudo gpasswd -a charlie testers
   sudo gpasswd -d charlie testers
   sudo groupadd managers
 
@@ -722,6 +717,7 @@ SOLUTION:
 ─────────
 Commands:
   sudo gpasswd -a dave developers
+  sudo gpasswd -a charlie testers
   sudo gpasswd -d charlie testers
   sudo groupadd managers
 
@@ -729,6 +725,9 @@ Explanation:
   • gpasswd -a: Add user to group
   • gpasswd -d: Delete user from group
   • groupadd: Create new group
+
+This exercise demonstrates both adding AND removing users with gpasswd.
+Charlie is added to testers, then immediately removed to practice both operations.
 
 gpasswd vs usermod:
   gpasswd:
@@ -808,11 +807,6 @@ validate() {
     
     if ! id bob 2>/dev/null | grep -q "developers"; then
         print_color "$RED" "  ✗ bob not in developers"
-        membership_ok=false
-    fi
-    
-    if ! id charlie 2>/dev/null | grep -q "testers"; then
-        print_color "$RED" "  ✗ charlie not in testers"
         membership_ok=false
     fi
     
@@ -927,7 +921,6 @@ OBJECTIVE 2: Add users to groups
 Commands:
   sudo usermod -aG developers alice
   sudo usermod -aG developers bob
-  sudo usermod -aG testers charlie
   sudo usermod -aG devops alice
 
 Verification:
@@ -950,8 +943,8 @@ OBJECTIVE 4: Change primary group
 ─────────────────────────────────────────────────────────────────
 Commands:
   sudo usermod -g developers alice
-  sudo -u alice touch /opt/grouptest/alice-new.txt
-  ls -l /opt/grouptest/alice-new.txt
+  sudo -u alice touch /tmp/grouptest/alice-new.txt
+  ls -l /tmp/grouptest/alice-new.txt
 
 Verification:
   id alice | grep "gid="
@@ -961,8 +954,11 @@ OBJECTIVE 5: Manage with gpasswd
 ─────────────────────────────────────────────────────────────────
 Commands:
   sudo gpasswd -a dave developers
+  sudo gpasswd -a charlie testers
   sudo gpasswd -d charlie testers
   sudo groupadd managers
+
+Note: Charlie is added then removed to practice both gpasswd operations.
 
 Verification:
   getent group developers
@@ -1075,7 +1071,7 @@ cleanup_lab() {
     groupdel testers 2>/dev/null || true
     groupdel devops 2>/dev/null || true
     groupdel managers 2>/dev/null || true
-    rm -rf /opt/grouptest 2>/dev/null || true
+    rm -rf /tmp/grouptest 2>/dev/null || true
     
     echo "  ✓ All lab components removed"
 }
