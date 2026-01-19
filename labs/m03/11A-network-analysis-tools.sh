@@ -868,7 +868,7 @@ CONCEPTUAL UNDERSTANDING
 
 ping command:
   Purpose: Test network connectivity
-  Protocol: ICMP (Internet Control Message Protocol)
+  Protocol: ICMP - Internet Control Message Protocol
   
   Options:
   -c N - Send N packets
@@ -877,16 +877,16 @@ ping command:
   
   Output interpretation:
   • 0% packet loss: Good connectivity
-  • <5% packet loss: Acceptable
-  • >10% packet loss: Network issues
+  • Less than 5% packet loss: Acceptable
+  • Greater than 10% packet loss: Network issues
   • 100% packet loss: No connectivity
 
 ip command:
   Replaces deprecated: ifconfig, route, arp
   
   Subcommands:
-  ip link - Network interfaces (layer 2)
-  ip addr - IP addresses (layer 3)
+  ip link - Network interfaces, layer 2
+  ip addr - IP addresses, layer 3
   ip route - Routing table
   ip neigh - ARP table
   
@@ -897,15 +897,15 @@ ip command:
 
 tracepath command:
   Purpose: Show network path to destination
-  Shows: Each router (hop) along the path
+  Shows: Each router hop along the path
   
-  Similar to: traceroute (but doesn't need root)
+  Similar to: traceroute, but doesn't need root
   
   Output shows:
-  • Hop number
-  • Router IP/hostname
-  • Latency (ms)
-  • MTU (Maximum Transmission Unit)
+  - Hop number
+  - Router IP/hostname
+  - Latency in milliseconds
+  - MTU - Maximum Transmission Unit
 
 ss command:
   Replaces deprecated: netstat
@@ -914,9 +914,9 @@ ss command:
   -t - TCP sockets
   -u - UDP sockets  
   -l - Listening sockets
-  -n - Numeric (no DNS lookups)
+  -n - Numeric, no DNS lookups
   -a - All sockets
-  -p - Show process (needs root)
+  -p - Show process, needs root
   
   Socket states:
   LISTEN - Waiting for connections
@@ -932,7 +932,7 @@ Mistake 1: Forgetting -c with ping
   Result: Ping runs forever
   Fix: Use Ctrl+C to stop, or use -c 4
 
-Mistake 2: Not using numeric (-n) with ss
+Mistake 2: Not using numeric -n flag with ss
   Result: Slow output due to DNS lookups
   Fix: Use ss -tln instead of ss -tl
 
@@ -943,16 +943,16 @@ Mistake 3: Confusing ip addr and ip route
 
 Mistake 4: Expecting all tracepath hops to respond
   Result: See "no reply" or asterisks
-  Fix: This is normal - routers often don't respond
+  Fix: This is normal - routers often do not respond
 
 
 EXAM TIPS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. Use ping -c to limit packets (avoid infinite ping)
-2. ip command replaces ifconfig (know ip addr, ip route)
-3. ss replaces netstat (use ss -tln for listening)
-4. tracepath doesn't require root (unlike traceroute)
+1. Use ping -c to limit packets, avoid infinite ping
+2. ip command replaces ifconfig, know ip addr and ip route
+3. ss replaces netstat, use ss -tln for listening
+4. tracepath does not require root, unlike traceroute
 5. Always check connectivity before complex troubleshooting
 
 EOF
