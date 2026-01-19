@@ -72,9 +72,8 @@ for maintaining reliable network services.
 
 OBJECTIVES:
   1. Use ping to test network connectivity
-     • Test connectivity to localhost (127.0.0.1)
-     • Test connectivity to gateway/router
-     • Test connectivity to external host (8.8.8.8 - Google DNS)
+     • Test connectivity to localhost: 127.0.0.1
+     • Test connectivity to external host: 8.8.8.8
      • Use ping -c to limit packet count
      • Save output to /tmp/network-lab/ping-results.txt
 
@@ -86,8 +85,7 @@ OBJECTIVES:
      • Save routing table to /tmp/network-lab/routing.txt
 
   3. Use tracepath to trace network routes
-     • Trace route to 8.8.8.8 (Google DNS)
-     • Trace route to a domain name (google.com)
+     • Trace route to 8.8.8.8
      • Understand hop count and network path
      • Save tracepath output to /tmp/network-lab/tracepath.txt
 
@@ -128,10 +126,10 @@ EOF
 #############################################################################
 objectives_quick() {
     cat << 'EOF'
-  ☐ 1. Test connectivity with ping (localhost, gateway, 8.8.8.8)
-  ☐ 2. Analyze network config with ip (link, addr, route)
+  ☐ 1. Test connectivity with ping - localhost, gateway, 8.8.8.8
+  ☐ 2. Analyze network config with ip - link, addr, route
   ☐ 3. Trace network path with tracepath to 8.8.8.8
-  ☐ 4. View socket statistics with ss (TCP, listening, all)
+  ☐ 4. View socket statistics with ss - TCP, listening, all
   ☐ 5. Document findings in analysis.txt
 EOF
 }
@@ -146,7 +144,7 @@ get_step_count() {
 
 scenario_context() {
     cat << 'EOF'
-You're troubleshooting network connectivity and analyzing your system's network
+You are troubleshooting network connectivity and analyzing your system's network
 configuration using standard Linux tools.
 
 Output directory: /tmp/network-lab/
@@ -158,34 +156,22 @@ show_step_1() {
     cat << 'EOF'
 TASK: Use ping to test network connectivity
 
-The ping command sends ICMP echo requests to verify network connectivity. It's
+The ping command sends ICMP echo requests to verify network connectivity. It is
 the first tool you should use when troubleshooting network issues.
 
-What to do:
+Requirements:
   • Test localhost: ping -c 4 127.0.0.1
   • Test external host: ping -c 4 8.8.8.8
   • Save results: ping -c 4 8.8.8.8 > /tmp/network-lab/ping-results.txt
 
-Tools available:
+Commands you might need:
   • ping -c N - Send N packets then stop
-  • ping -c 4 - Common usage (4 packets)
+  • ping -c 4 - Common usage, sends 4 packets
   • Ctrl+C - Stop continuous ping
-
-Format:
-  ping -c 4 127.0.0.1
-  ping -c 4 8.8.8.8 > /tmp/network-lab/ping-results.txt
-
-Think about:
-  • What does a successful ping look like?
-  • What do packet loss and TTL mean?
-  • Why test localhost separately?
-
-After completing: Check with: cat /tmp/network-lab/ping-results.txt
 EOF
 }
 
 validate_step_1() {
-    # Check if results file exists
     if [ ! -f /tmp/network-lab/ping-results.txt ]; then
         echo ""
         print_color "$RED" "✗ ping-results.txt not found"
@@ -193,10 +179,9 @@ validate_step_1() {
         return 1
     fi
     
-    # Check if file contains ping output
     if ! grep -q "bytes from" /tmp/network-lab/ping-results.txt 2>/dev/null; then
         echo ""
-        print_color "$RED" "✗ ping-results.txt doesn't contain valid ping output"
+        print_color "$RED" "✗ ping-results.txt does not contain valid ping output"
         return 1
     fi
     
@@ -217,35 +202,28 @@ Commands:
 Explanation:
   • ping: Send ICMP echo requests
   • -c 4: Send 4 packets then stop
-  • 127.0.0.1: Localhost (loopback interface)
+  • 127.0.0.1: Localhost loopback interface
   • 8.8.8.8: Google's public DNS server
   • >: Redirect output to file
 
 Understanding ping output:
   64 bytes from 8.8.8.8: icmp_seq=1 ttl=117 time=14.2 ms
   
+  Fields:
   • 64 bytes: Packet size
   • icmp_seq: Sequence number
-  • ttl: Time To Live (hops remaining)
-  • time: Round-trip time (latency)
+  • ttl: Time To Live, hops remaining
+  • time: Round-trip time, latency
 
 Ping statistics:
   4 packets transmitted, 4 received, 0% packet loss
   
   • 0% packet loss = good connectivity
-  • >0% packet loss = network issues
+  • Greater than 0% packet loss = network issues
   • 100% packet loss = no connectivity
 
-Common ping targets:
-  127.0.0.1 - Localhost (tests TCP/IP stack)
-  Gateway IP - Tests local network
-  8.8.8.8 - Tests internet connectivity
-  Domain names - Tests DNS resolution
-
-Troubleshooting:
-  "Destination Host Unreachable" - No route to host
-  "Request timeout" - Packets not returning
-  "Name or service not known" - DNS problem
+Verification:
+  cat /tmp/network-lab/ping-results.txt
 
 EOF
 }
@@ -264,34 +242,21 @@ TASK: Use ip command to analyze network configuration
 The ip command is the modern tool for managing and viewing network configuration.
 It replaces the deprecated ifconfig command.
 
-What to do:
+Requirements:
   • View network interfaces: ip link show
   • View IP addresses: ip addr show
   • View routing table: ip route show
   • Save routing table: ip route show > /tmp/network-lab/routing.txt
 
-Tools available:
+Commands you might need:
   • ip link - Show network interfaces
   • ip addr - Show IP addresses
   • ip route - Show routing table
   • ip -s link - Show interface statistics
-
-Format:
-  ip link show
-  ip addr show
-  ip route show > /tmp/network-lab/routing.txt
-
-Think about:
-  • Which interface is your primary network connection?
-  • What's your IP address?
-  • What's your default gateway?
-
-After completing: Check with: cat /tmp/network-lab/routing.txt
 EOF
 }
 
 validate_step_2() {
-    # Check if routing file exists
     if [ ! -f /tmp/network-lab/routing.txt ]; then
         echo ""
         print_color "$RED" "✗ routing.txt not found"
@@ -299,10 +264,9 @@ validate_step_2() {
         return 1
     fi
     
-    # Check if file contains routing information
     if ! grep -q "default" /tmp/network-lab/routing.txt 2>/dev/null; then
         echo ""
-        print_color "$YELLOW" "  Note: No default route found (may be expected in some environments)"
+        print_color "$YELLOW" "  Note: No default route found, may be expected in some environments"
     fi
     
     return 0
@@ -320,13 +284,14 @@ Commands:
   ip route show > /tmp/network-lab/routing.txt
 
 Explanation:
-  • ip link: Shows network interfaces (layer 2)
-  • ip addr: Shows IP addresses (layer 3)
+  • ip link: Shows network interfaces, layer 2
+  • ip addr: Shows IP addresses, layer 3
   • ip route: Shows routing table
 
 ip link output:
   2: ens33: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500
   
+  Fields:
   • ens33: Interface name
   • UP: Interface is active
   • LOWER_UP: Physical link is up
@@ -335,6 +300,7 @@ ip link output:
 ip addr output:
   inet 192.168.1.100/24 brd 192.168.1.255 scope global ens33
   
+  Fields:
   • inet: IPv4 address
   • 192.168.1.100/24: IP address with subnet
   • brd: Broadcast address
@@ -344,22 +310,14 @@ ip route output:
   default via 192.168.1.1 dev ens33
   192.168.1.0/24 dev ens33 proto kernel scope link src 192.168.1.100
   
+  Fields:
   • default via X.X.X.X: Default gateway
   • dev ens33: Network interface
   • proto kernel: Added by kernel
   • src: Source address
 
-Network interface naming:
-  • lo: Loopback (localhost)
-  • ens33: PCI bus network card
-  • enp0s3: Alternative PCI naming
-  • eth0: Classical naming (deprecated)
-
-Useful ip commands:
-  ip -s link - Show statistics
-  ip -4 addr - Show only IPv4
-  ip -6 addr - Show only IPv6
-  ip route get 8.8.8.8 - Show route to specific IP
+Verification:
+  cat /tmp/network-lab/routing.txt
 
 EOF
 }
@@ -375,31 +333,20 @@ show_step_3() {
 TASK: Use tracepath to trace network routes
 
 tracepath shows the network path packets take to reach a destination. Each
-"hop" represents a router along the path.
+hop represents a router along the path.
 
-What to do:
+Requirements:
   • Trace route to 8.8.8.8: tracepath 8.8.8.8
   • Save output: tracepath 8.8.8.8 > /tmp/network-lab/tracepath.txt
   • Note: This may take 30-60 seconds
 
-Tools available:
+Commands you might need:
   • tracepath - Trace network path
-  • tracepath -n - Don't resolve hostnames (faster)
-
-Format:
-  tracepath 8.8.8.8 > /tmp/network-lab/tracepath.txt
-
-Think about:
-  • How many hops to reach 8.8.8.8?
-  • Do all hops respond?
-  • What's the latency at each hop?
-
-After completing: Check with: cat /tmp/network-lab/tracepath.txt
+  • tracepath -n - Do not resolve hostnames, faster
 EOF
 }
 
 validate_step_3() {
-    # Check if tracepath file exists
     if [ ! -f /tmp/network-lab/tracepath.txt ]; then
         echo ""
         print_color "$RED" "✗ tracepath.txt not found"
@@ -407,7 +354,6 @@ validate_step_3() {
         return 1
     fi
     
-    # Check if file has content
     if [ ! -s /tmp/network-lab/tracepath.txt ]; then
         echo ""
         print_color "$RED" "✗ tracepath.txt is empty"
@@ -427,12 +373,12 @@ Commands:
   tracepath 8.8.8.8 > /tmp/network-lab/tracepath.txt
 
 Alternative:
-  tracepath -n 8.8.8.8  # Don't resolve hostnames (faster)
-  tracepath google.com  # Use domain name
+  tracepath -n 8.8.8.8
+  tracepath google.com
 
 Explanation:
   • tracepath: Shows network path hop-by-hop
-  • Each line is one "hop" (router)
+  • Each line is one hop, one router
   • Shows latency and MTU
 
 Sample tracepath output:
@@ -445,25 +391,11 @@ Sample tracepath output:
 Understanding output:
   • Line 1: Your gateway
   • Lines 2-N: Intermediate routers
-  • "no reply": Router doesn't respond (common)
+  • "no reply": Router does not respond, common
   • "reached": Destination found
 
-Common patterns:
-  • Few hops (1-5): Local or regional destination
-  • Many hops (10-20): International destination
-  • "no reply" hops: Routers configured not to respond
-  • Asterisks (***): Timeout at that hop
-
-Why use tracepath?
-  • Identify where packet loss occurs
-  • Find slow network segments
-  • Verify routing path
-  • Troubleshoot connectivity issues
-
-tracepath vs traceroute:
-  • tracepath: Standard on RHEL, doesn't need root
-  • traceroute: Traditional tool, requires root
-  • Both show network path
+Verification:
+  cat /tmp/network-lab/tracepath.txt
 
 EOF
 }
@@ -479,36 +411,25 @@ show_step_4() {
     cat << 'EOF'
 TASK: Use ss to analyze socket statistics
 
-The ss (socket statistics) command shows network connections and listening
-services. It replaces the deprecated netstat command.
+The ss command shows network connections and listening services. It replaces
+the deprecated netstat command.
 
-What to do:
+Requirements:
   • View all TCP connections: ss -t
   • View TCP listening sockets: ss -tln
   • View all sockets: ss -tuna
   • Save listening services: ss -tln > /tmp/network-lab/listening.txt
 
-Tools available:
+Commands you might need:
   • ss -t - TCP sockets
   • ss -u - UDP sockets
   • ss -l - Listening sockets
-  • ss -n - Numeric (don't resolve names)
+  • ss -n - Numeric, do not resolve names
   • ss -a - All sockets
-
-Format:
-  ss -tln > /tmp/network-lab/listening.txt
-
-Think about:
-  • What services are listening on your system?
-  • Which ports are in use?
-  • What's the difference between LISTEN and ESTABLISHED?
-
-After completing: Check with: cat /tmp/network-lab/listening.txt
 EOF
 }
 
 validate_step_4() {
-    # Check if listening file exists
     if [ ! -f /tmp/network-lab/listening.txt ]; then
         echo ""
         print_color "$RED" "✗ listening.txt not found"
@@ -516,10 +437,9 @@ validate_step_4() {
         return 1
     fi
     
-    # Check if file contains socket information
     if ! grep -q "State" /tmp/network-lab/listening.txt 2>/dev/null; then
         echo ""
-        print_color "$RED" "✗ listening.txt doesn't contain valid ss output"
+        print_color "$RED" "✗ listening.txt does not contain valid ss output"
         return 1
     fi
     
@@ -542,9 +462,8 @@ Explanation:
   • -t: TCP sockets
   • -u: UDP sockets
   • -l: Listening sockets
-  • -n: Numeric (no name resolution)
-  • -a: All sockets (listening + established)
-  • -p: Show process using socket (requires root)
+  • -n: Numeric, no name resolution
+  • -a: All sockets, listening and established
 
 Sample ss output:
   State   Recv-Q Send-Q Local Address:Port  Peer Address:Port
@@ -552,7 +471,7 @@ Sample ss output:
   ESTAB   0      0      192.168.1.100:22    192.168.1.50:54321
 
 Understanding columns:
-  • State: Socket state (LISTEN, ESTAB, etc.)
+  • State: Socket state, LISTEN or ESTAB
   • Recv-Q: Receive queue
   • Send-Q: Send queue
   • Local Address:Port: Your system
@@ -564,23 +483,8 @@ Common socket states:
   TIME-WAIT - Connection closing
   CLOSE-WAIT - Waiting to close
 
-Common listening ports:
-  22 - SSH
-  80 - HTTP
-  443 - HTTPS
-  25 - SMTP
-  3306 - MySQL
-
-Useful ss commands:
-  ss -tln - TCP listening, numeric
-  ss -tunap - All TCP/UDP, numeric, with processes
-  ss -tuna | grep :22 - Find SSH connections
-  ss -s - Summary statistics
-
-ss vs netstat:
-  • ss: Modern, faster, recommended
-  • netstat: Deprecated, legacy systems
-  • ss has better performance
+Verification:
+  cat /tmp/network-lab/listening.txt
 
 EOF
 }
@@ -595,40 +499,26 @@ show_step_5() {
     cat << 'EOF'
 TASK: Interpret and analyze network information
 
-Review all the information you've gathered and document your findings in a
+Review all the information you have gathered and document your findings in a
 summary analysis file.
 
-What to do:
+Requirements:
   • Create /tmp/network-lab/analysis.txt
   • Document the following:
     - Your system's primary IP address
     - Your default gateway IP
     - Number of hops to 8.8.8.8
-    - Services listening on port 22 (SSH)
+    - Services listening on port 22
     - Any observations about network connectivity
 
-Tools to review:
+Commands you might need:
   • cat /tmp/network-lab/routing.txt
   • cat /tmp/network-lab/tracepath.txt
   • cat /tmp/network-lab/listening.txt
-
-Format (create text file with):
-  IP Address: [your IP]
-  Gateway: [gateway IP]
-  Hops to 8.8.8.8: [number]
-  SSH Listening: [yes/no]
-
-Think about:
-  • How would you find your IP from routing.txt?
-  • How do you count hops in tracepath output?
-  • Which line in listening.txt shows SSH?
-
-After completing: Check with: cat /tmp/network-lab/analysis.txt
 EOF
 }
 
 validate_step_5() {
-    # Check if analysis file exists
     if [ ! -f /tmp/network-lab/analysis.txt ]; then
         echo ""
         print_color "$RED" "✗ analysis.txt not found"
@@ -636,7 +526,6 @@ validate_step_5() {
         return 1
     fi
     
-    # Check if file has content
     if [ ! -s /tmp/network-lab/analysis.txt ]; then
         echo ""
         print_color "$RED" "✗ analysis.txt is empty"
@@ -654,64 +543,37 @@ SOLUTION:
 Review your saved files and create analysis:
 
 Commands to extract information:
-  # Find your IP address
   ip addr show | grep "inet " | grep -v 127.0.0.1
-  
-  # Find gateway
   ip route show | grep default
-  
-  # Count hops
   grep "reached" /tmp/network-lab/tracepath.txt
-  
-  # Check SSH listening
   grep ":22" /tmp/network-lab/listening.txt
 
 Create analysis file:
-  cat > /tmp/network-lab/analysis.txt << 'EOF'
+  cat > /tmp/network-lab/analysis.txt << 'ENDFILE'
   NETWORK ANALYSIS SUMMARY
-  ========================
   
   Primary IP Address: 192.168.1.100
-  Subnet Mask: /24 (255.255.255.0)
+  Subnet Mask: /24
   Default Gateway: 192.168.1.1
   Network Interface: ens33
   
   Connectivity Test Results:
   - Localhost ping: Success
   - Gateway ping: Success
-  - External ping (8.8.8.8): Success
+  - External ping 8.8.8.8: Success
   
   Route to 8.8.8.8:
   - Number of hops: 12
   - Average latency: 14ms
   
   Listening Services:
-  - SSH (port 22): Yes, listening on all interfaces
-  - Other services: [list any you found]
+  - SSH port 22: Yes, listening on all interfaces
   
   Network Status: Fully operational
-EOF
+ENDFILE
 
-How to interpret data:
-
-From ip addr:
-  inet 192.168.1.100/24 - Your IP is 192.168.1.100
-
-From ip route:
-  default via 192.168.1.1 - Gateway is 192.168.1.1
-
-From tracepath:
-  Count lines until "reached" - That's hop count
-
-From ss -tln:
-  0.0.0.0:22 - SSH listening on all IPs
-  127.0.0.1:631 - Service only on localhost
-
-Key things to note:
-  • IP address format (IPv4 vs IPv6)
-  • Gateway reachability
-  • Number of network hops
-  • Which services expose to network
+Verification:
+  cat /tmp/network-lab/analysis.txt
 
 EOF
 }
@@ -899,11 +761,11 @@ tracepath command:
   Purpose: Show network path to destination
   Shows: Each router hop along the path
   
-  Similar to: traceroute, but doesn't need root
+  Similar to: traceroute, but does not need root
   
   Output shows:
   - Hop number
-  - Router IP/hostname
+  - Router IP or hostname
   - Latency in milliseconds
   - MTU - Maximum Transmission Unit
 
@@ -912,7 +774,7 @@ ss command:
   
   Common options:
   -t - TCP sockets
-  -u - UDP sockets  
+  -u - UDP sockets
   -l - Listening sockets
   -n - Numeric, no DNS lookups
   -a - All sockets
