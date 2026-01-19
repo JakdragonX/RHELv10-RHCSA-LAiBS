@@ -457,11 +457,14 @@ validate_step_3() {
         return 1
     fi
     
-    # Check password aging settings
+    # Check password aging settings using chage
     local max_days=$(sudo chage -l secureuser 2>/dev/null | grep "Maximum" | grep -o "[0-9]*" | head -1)
     local min_days=$(sudo chage -l secureuser 2>/dev/null | grep "Minimum" | grep -o "[0-9]*" | head -1)
     local warn_days=$(sudo chage -l secureuser 2>/dev/null | grep "warning" | grep -o "[0-9]*")
-    local inactive=$(sudo chage -l secureuser 2>/dev/null | grep "inactive" | grep -o "[0-9]*")
+    
+    # Use passwd -S for inactive period as it's more reliable
+    local passwd_output=$(sudo passwd -S secureuser 2>/dev/null)
+    local inactive=$(echo "$passwd_output" | awk '{print $7}')
     
     if [ "$max_days" != "60" ] || [ "$min_days" != "5" ] || \
        [ "$warn_days" != "10" ] || [ "$inactive" != "30" ]; then
@@ -787,7 +790,9 @@ validate() {
         local max_days=$(sudo chage -l secureuser 2>/dev/null | grep "Maximum" | grep -o "[0-9]*" | head -1)
         local min_days=$(sudo chage -l secureuser 2>/dev/null | grep "Minimum" | grep -o "[0-9]*" | head -1)
         local warn=$(sudo chage -l secureuser 2>/dev/null | grep "warning" | grep -o "[0-9]*")
-        local inactive=$(sudo chage -l secureuser 2>/dev/null | grep "inactive" | grep -o "[0-9]*")
+        # Use passwd -S for inactive as it's more reliable
+        local passwd_output=$(sudo passwd -S secureuser 2>/dev/null)
+        local inactive=$(echo "$passwd_output" | awk '{print $7}')
         
         if [ "$max_days" = "60" ] && [ "$min_days" = "5" ] && \
            [ "$warn" = "10" ] && [ "$inactive" = "30" ]; then
