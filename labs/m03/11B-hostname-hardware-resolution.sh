@@ -238,9 +238,9 @@ EOF
 }
 
 hint_step_2() {
-    echo "  Use: lspci"
-    echo "  Use: lspci -k | grep -A3 Ethernet"
-    echo "  Save: lspci -k > /tmp/hostname-lab/network-card.txt"
+    echo "  Physical/PCI: lspci -k > /tmp/hostname-lab/network-card.txt"
+    echo "  VM alternative: ip link show > /tmp/hostname-lab/network-card.txt"
+    echo "  Then: ethtool -i INTERFACE >> /tmp/hostname-lab/network-card.txt"
 }
 
 # STEP 2
@@ -257,12 +257,17 @@ Requirements:
   • Show kernel drivers: lspci -k
   • Identify network card
   • Save output: lspci -k > /tmp/hostname-lab/network-card.txt
+  
+  NOTE: If in a virtual machine with no PCI devices shown:
+  • Use: ip link show > /tmp/hostname-lab/network-card.txt
+  • Then: ethtool -i INTERFACE >> /tmp/hostname-lab/network-card.txt
+  • Replace INTERFACE with your network interface name from ip link
 
 Commands you might need:
   • lspci - List PCI devices
   • lspci -k - Show kernel drivers
-  • lspci -v - Verbose output
-  • lspci | grep -i network - Find network devices
+  • ip link show - Show network interfaces (VM alternative)
+  • ethtool -i INTERFACE - Show driver info (VM alternative)
 EOF
 }
 
@@ -271,15 +276,19 @@ validate_step_2() {
         echo ""
         print_color "$RED" "✗ network-card.txt not found"
         echo "  Try: lspci -k > /tmp/hostname-lab/network-card.txt"
+        echo "  Or for VMs: ip link show > /tmp/hostname-lab/network-card.txt"
         return 1
     fi
     
-    if ! grep -q "Kernel driver in use" /tmp/hostname-lab/network-card.txt 2>/dev/null; then
+    # Check if file has content - accept either lspci output or ip link output
+    if [ ! -s /tmp/hostname-lab/network-card.txt ]; then
         echo ""
-        print_color "$YELLOW" "  Note: File created but may not contain driver information"
-        echo "  Make sure you used: lspci -k"
+        print_color "$RED" "✗ network-card.txt is empty"
+        return 1
     fi
     
+    # If file contains network information, that's sufficient
+    # Could be from lspci or from ip link show
     return 0
 }
 
@@ -288,13 +297,20 @@ solution_step_2() {
 
 SOLUTION:
 ─────────
-Commands:
+Physical Hardware / VMs with PCI devices:
   lspci
   lspci -k
   lspci | grep -i ethernet
   lspci -k > /tmp/hostname-lab/network-card.txt
 
-Explanation:
+Virtual Machines without PCI devices:
+  ip link show
+  ip link show > /tmp/hostname-lab/network-card.txt
+  
+  # Get driver info for your interface (replace ens160 with yours)
+  ethtool -i ens160 >> /tmp/hostname-lab/network-card.txt
+
+Explanation - lspci:
   • lspci: List all PCI devices
   • -k: Show kernel drivers in use
   • -v: Verbose output with more details
@@ -312,8 +328,33 @@ Fields explained:
   • Kernel driver in use: Active driver
   • Kernel modules: Available drivers
 
+Explanation - VM alternative with ip link and ethtool:
+  ip link show output:
+  2: ens160: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500
+      link/ether 00:0c:29:3a:2b:1c brd ff:ff:ff:ff:ff:ff
+  
+  ethtool -i ens160 output:
+  driver: vmxnet3
+  version: 1.7.0.0-k
+  firmware-version: 
+  bus-info: 0000:03:00.0
+
+Why VMs may not show PCI devices:
+  • Some virtualization platforms use paravirtualized devices
+  • These appear as virtual devices, not PCI
+  • KVM, VMware, VirtualBox may differ
+  • ip link shows all network interfaces regardless
+  • ethtool shows driver information
+
+Common VM network drivers:
+  • vmxnet3: VMware paravirtualized
+  • virtio_net: KVM/QEMU paravirtualized
+  • e1000: Intel emulated (older)
+  • e1000e: Intel emulated (newer)
+
 Verification:
   cat /tmp/hostname-lab/network-card.txt
+  ip link show
   lspci | grep -i network
 
 EOF
@@ -701,11 +742,17 @@ Commands:
 
 OBJECTIVE 2: Examine hardware with lspci
 ─────────────────────────────────────────────────────────────────
-Commands:
+Physical Hardware Commands:
   lspci
   lspci -k
   lspci | grep -i ethernet
   lspci -k > /tmp/hostname-lab/network-card.txt
+
+Virtual Machine Alternative:
+  ip link show
+  ip link show > /tmp/hostname-lab/network-card.txt
+  ethtool -i ens160 >> /tmp/hostname-lab/network-card.txt
+  # Replace ens160 with your actual interface name
 
 
 OBJECTIVE 3: Configure /etc/hosts
@@ -748,6 +795,12 @@ hostnamectl:
 lspci:
   Purpose: List PCI hardware devices
   Common flag: -k shows kernel drivers
+  
+  Virtual Machine Note:
+  • Some VMs use paravirtualized devices
+  • May not show in lspci output
+  • Use ip link show and ethtool as alternatives
+  • Common VM drivers: vmxnet3, virtio_net, e1000
 
 /etc/hosts:
   Purpose: Static hostname-to-IP mappings
