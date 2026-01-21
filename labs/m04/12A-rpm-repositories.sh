@@ -1,5 +1,5 @@
 #!/bin/bash
-# labs/m04/14A-rpm-repositories.sh
+# labs/m04/12A-rpm-repositories.sh
 # Lab: Understanding RPMs and repositories
 # Difficulty: Beginner
 # RHCSA Objective: 12.2, 12.3 - RPM package management and repository configuration
