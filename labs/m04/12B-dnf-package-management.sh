@@ -1,5 +1,5 @@
 #!/bin/bash
-# labs/m04/14B-dnf-package-management.sh
+# labs/m04/12B-dnf-package-management.sh
 # Lab: Understanding DNF
 # Difficulty: Intermediate
 # RHCSA Objective: 12.4, 12.5, 12.6 - DNF package management, groups, and history
