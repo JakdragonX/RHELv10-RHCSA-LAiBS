@@ -1,5 +1,5 @@
 #!/bin/bash
-# labs/m04/12C-flatpak-troubleshooting.sh
+# labs/m04/14C-flatpak-troubleshooting.sh
 # Lab: Understanding Flatpak and troubleshooting package management
 # Difficulty: Intermediate
 # RHCSA Objective: 12.8, 12.9 - Flatpak management and package troubleshooting
@@ -20,7 +20,7 @@ setup_lab() {
     echo "Preparing lab environment..."
     
     # Create working directory
-    mkdir -p /tmp/flatpak-lab 2>/dev/null || true
+    mkdir -p /tmp/package-lab 2>/dev/null || true
     
     # Install flatpak if not present
     if ! command -v flatpak >/dev/null 2>&1; then
@@ -28,18 +28,26 @@ setup_lab() {
         dnf install -y flatpak >/dev/null 2>&1
     fi
     
-    # Create a broken repository scenario for troubleshooting
-    cat > /etc/yum.repos.d/broken-test.repo << 'EOF'
-[broken-test]
-name=Broken Test Repository
-baseurl=http://invalid.example.com/repo
+    # Create a broken repository
+    cat > /etc/yum.repos.d/broken-repo.repo << 'EOF'
+[broken-repo]
+name=Broken Repository
+baseurl=http://does-not-exist.invalid.local/repo
 enabled=1
-gpgcheck=1
+gpgcheck=0
 EOF
     
+    # Install a test package that we'll work with
+    dnf install -y tree >/dev/null 2>&1 || true
+    
+    # Corrupt DNF cache to create a scenario
+    touch /var/cache/dnf/.broken-cache-marker
+    
     echo "  ✓ Lab environment ready"
-    echo "  ✓ Flatpak installed"
-    echo "  ✓ Troubleshooting scenarios prepared"
+    echo "  ✓ Broken scenarios created"
+    echo ""
+    echo "  SCENARIO: Your system has several package management issues"
+    echo "  You'll diagnose and fix them step by step"
 }
 
 #############################################################################
@@ -48,24 +56,19 @@ EOF
 prerequisites() {
     cat << 'EOF'
 Knowledge Requirements:
-  • Understanding of RPM and DNF
-  • Repository configuration basics
-  • Container concepts helpful but not required
+  • RPM and DNF basics
+  • Repository configuration
+  • Package management concepts
 
 Commands You'll Use:
   • flatpak - Flatpak package manager
-  • flatpak remote-add - Add remote repositories
-  • flatpak search - Search for applications
-  • flatpak install - Install applications
-  • flatpak list - List installed apps
-  • flatpak remove - Remove applications
-  • dnf - For troubleshooting DNF issues
+  • dnf - DNF package manager
+  • rpm - RPM package manager
 
 Files You'll Interact With:
-  • /etc/flatpak/remotes.d/ - Flatpak remote repositories
-  • /var/lib/flatpak/ - Flatpak data directory
-  • /etc/yum.repos.d/ - DNF repository configuration
-  • /var/log/dnf.log - DNF operation log
+  • /etc/yum.repos.d/ - Repository configuration
+  • /var/cache/dnf/ - DNF cache
+  • /var/lib/rpm/ - RPM database
 EOF
 }
 
@@ -75,74 +78,59 @@ EOF
 scenario() {
     cat << 'EOF'
 SCENARIO:
-You are a system administrator learning modern package management with Flatpak
-and developing troubleshooting skills for common RPM, DNF, and repository
-issues. Your organization is evaluating Flatpak for desktop applications while
-maintaining traditional DNF for server packages.
+Your RHEL system has multiple package management issues. DNF operations are
+failing, and you need to diagnose and fix each problem systematically. You'll
+also explore Flatpak as an alternative packaging system.
 
 BACKGROUND:
-Flatpak provides containerized applications that work across distributions.
-Understanding both Flatpak and traditional package management is important for
-modern RHEL administration. You also need strong troubleshooting skills for
-when package operations fail.
+Real-world systems often develop package management issues from interrupted
+updates, network problems, or configuration errors. This lab simulates common
+problems you'll encounter as a system administrator.
 
 OBJECTIVES:
-  1. Explore Flatpak installation and configuration
-     • Verify flatpak is installed
-     • Check flatpak version
-     • List configured remotes
-     • Understand Flatpak vs DNF use cases
-     • Document in /tmp/flatpak-lab/flatpak-setup.txt
+  1. Diagnose why DNF operations are failing
+     • Try to update package lists
+     • Identify the broken repository
+     • Fix the repository issue
+     • Verify DNF works again
 
-  2. Work with Flatpak remotes
-     • List available remotes
-     • Add Fedora registry remote (if not present)
-     • List applications in a remote
-     • Understand OCI registry concept
-     • Document in /tmp/flatpak-lab/remotes.txt
+  2. Clean up DNF cache issues
+     • Check for cache problems
+     • Clean the DNF cache completely
+     • Rebuild repository metadata
+     • Test DNF operations work smoothly
 
-  3. Search and explore Flatpak applications
+  3. Verify RPM database integrity
+     • Check RPM database is healthy
+     • Verify installed package integrity
+     • Understand database location and structure
+     • Know when rebuilding is necessary
+
+  4. Install and configure Flatpak
+     • Verify Flatpak is installed
+     • Add a Flatpak remote repository
      • Search for available applications
-     • Show information about an application
-     • Understand application IDs and naming
-     • Document findings in /tmp/flatpak-lab/search-results.txt
+     • Understand Flatpak architecture
 
-  4. Troubleshoot DNF repository issues
-     • Identify the broken repository in /etc/yum.repos.d/
-     • Attempt dnf operation and observe error
-     • Fix by disabling or removing broken repo
-     • Verify dnf works again
-     • Document in /tmp/flatpak-lab/dnf-troubleshooting.txt
-
-  5. Troubleshoot RPM database issues
-     • Simulate common RPM problems
-     • Check RPM database integrity
-     • Understand when to rebuild database
-     • Learn to verify package installation
-     • Document in /tmp/flatpak-lab/rpm-troubleshooting.txt
-
-  6. Practice DNF cache and metadata troubleshooting
-     • Clean DNF cache
-     • Rebuild metadata
-     • Understand makecache operation
-     • Test after cleaning
-     • Document in /tmp/flatpak-lab/cache-troubleshooting.txt
+  5. Compare package management systems
+     • Install a package with DNF
+     • Explore how Flatpak differs
+     • Remove test packages
+     • Understand when to use each system
 
 HINTS:
-  • flatpak --version shows installation
-  • flatpak remotes lists configured remotes
-  • DNF errors often point to repository issues
-  • Check /var/log/dnf.log for detailed errors
-  • dnf clean all removes cache
-  • Broken repos can be disabled without removal
+  • DNF errors often point to the problem
+  • Repository files are in /etc/yum.repos.d/
+  • dnf clean all is powerful
+  • Flatpak remotes provide applications
+  • Each step builds on the previous
 
 SUCCESS CRITERIA:
-  • Flatpak configuration explored
-  • Remotes managed successfully
-  • Application search completed
   • DNF repository issue resolved
-  • RPM troubleshooting understood
-  • DNF cache management demonstrated
+  • DNF cache cleaned and rebuilt
+  • RPM database verified healthy
+  • Flatpak configured with remote
+  • Understanding of both packaging systems
 EOF
 }
 
@@ -151,12 +139,11 @@ EOF
 #############################################################################
 objectives_quick() {
     cat << 'EOF'
-  ☐ 1. Explore Flatpak installation and configuration
-  ☐ 2. Work with Flatpak remotes
-  ☐ 3. Search and explore Flatpak applications
-  ☐ 4. Troubleshoot DNF repository issues
-  ☐ 5. Troubleshoot RPM database issues
-  ☐ 6. Practice DNF cache troubleshooting
+  ☐ 1. Fix broken DNF repository
+  ☐ 2. Clean and rebuild DNF cache
+  ☐ 3. Verify RPM database integrity
+  ☐ 4. Configure Flatpak with remote
+  ☐ 5. Compare packaging systems
 EOF
 }
 
@@ -165,58 +152,65 @@ EOF
 #############################################################################
 
 get_step_count() {
-    echo "6"
+    echo "5"
 }
 
 scenario_context() {
     cat << 'EOF'
-You are learning Flatpak and developing package management troubleshooting
-skills for RHEL systems.
+Your system has package management issues to diagnose and fix.
 
-Output directory: /tmp/flatpak-lab/
+Working directory: /tmp/package-lab/
 
-NOTE: A broken repository has been created for troubleshooting practice.
+This is a sequential troubleshooting workflow.
 EOF
 }
 
 # STEP 1
 show_step_1() {
     cat << 'EOF'
-TASK: Explore Flatpak installation and configuration
+TASK: Diagnose and fix DNF repository failure
 
-Learn about Flatpak installation, verify it works, and understand when to
-use Flatpak versus DNF for package management.
+Your first task is to identify why DNF is failing and fix the problem.
 
 Requirements:
-  • Check if flatpak is installed
-  • Display flatpak version
-  • List configured Flatpak remotes
-  • Compare Flatpak and DNF use cases
-  • Save findings to /tmp/flatpak-lab/flatpak-setup.txt
+  • Try running: dnf repolist
+  • Observe the error about a failing repository
+  • Find the broken repository in /etc/yum.repos.d/
+  • Fix it by setting enabled=0 or removing the file
+  • Verify dnf repolist succeeds
 
-Commands to explore:
-  • flatpak --version
-  • flatpak remotes
-  • which flatpak
-  • rpm -q flatpak
+Workflow:
+  1. Attempt DNF operation to see error
+  2. Identify which repository is broken
+  3. Disable or remove the broken repository
+  4. Confirm DNF works
 
-Questions to consider:
-  • When should you use Flatpak vs DNF?
-  • What are Flatpak remotes?
-  • Where does Flatpak store data?
+This simulates a common real-world issue where a repository
+becomes unavailable or is misconfigured.
 EOF
 }
 
 validate_step_1() {
-    if [ ! -f /tmp/flatpak-lab/flatpak-setup.txt ]; then
+    # Check if broken repo is fixed
+    local broken_enabled=0
+    if [ -f /etc/yum.repos.d/broken-repo.repo ]; then
+        if grep -q "enabled=1" /etc/yum.repos.d/broken-repo.repo 2>/dev/null; then
+            broken_enabled=1
+        fi
+    fi
+    
+    if [ $broken_enabled -eq 1 ]; then
         echo ""
-        print_color "$RED" "✗ flatpak-setup.txt not found"
+        print_color "$RED" "✗ Broken repository still enabled"
+        echo "  The broken-repo is still causing issues"
+        echo "  Hint: Edit /etc/yum.repos.d/broken-repo.repo"
         return 1
     fi
     
-    if [ ! -s /tmp/flatpak-lab/flatpak-setup.txt ]; then
+    # Verify DNF works
+    if ! dnf repolist >/dev/null 2>&1; then
         echo ""
-        print_color "$RED" "✗ flatpak-setup.txt is empty"
+        print_color "$RED" "✗ DNF still not working"
         return 1
     fi
     
@@ -224,9 +218,9 @@ validate_step_1() {
 }
 
 hint_step_1() {
-    echo "  Check version: flatpak --version"
-    echo "  List remotes: flatpak remotes"
-    echo "  Verify install: rpm -q flatpak"
+    echo "  Try: dnf repolist (observe error)"
+    echo "  Check: ls /etc/yum.repos.d/"
+    echo "  Fix: Edit broken-repo.repo, set enabled=0"
 }
 
 solution_step_1() {
@@ -234,84 +228,75 @@ solution_step_1() {
 
 SOLUTION:
 ─────────
-Check installation:
-  which flatpak
-  flatpak --version
-  rpm -q flatpak
+Step 1: Try DNF operation
+  dnf repolist
 
-List remotes:
-  flatpak remotes
+Step 2: Observe error about broken-repo
 
-Document:
-  echo "=== FLATPAK INSTALLATION ===" > /tmp/flatpak-lab/flatpak-setup.txt
-  flatpak --version >> /tmp/flatpak-lab/flatpak-setup.txt
-  echo "" >> /tmp/flatpak-lab/flatpak-setup.txt
-  echo "=== CONFIGURED REMOTES ===" >> /tmp/flatpak-lab/flatpak-setup.txt
-  flatpak remotes >> /tmp/flatpak-lab/flatpak-setup.txt
+Step 3: Check repository files
+  ls /etc/yum.repos.d/
+  cat /etc/yum.repos.d/broken-repo.repo
 
-Understanding use cases:
-  Flatpak best for:
-  - Desktop applications
-  - Cross-distribution compatibility
-  - Sandboxed applications
-  - User-installed software
+Step 4: Fix the issue
+  Option A - Disable:
+    sudo vi /etc/yum.repos.d/broken-repo.repo
+    Change: enabled=1 to enabled=0
   
-  DNF best for:
-  - System packages
-  - Server daemons
-  - Packages needing system integration
-  - Traditional RHEL packages
+  Option B - Remove:
+    sudo rm /etc/yum.repos.d/broken-repo.repo
+
+Step 5: Verify fix
+  dnf repolist
+
+Key learning: Repository errors prevent all DNF operations.
+Always check enabled repositories when DNF fails.
 
 EOF
 }
 
 hint_step_2() {
-    echo "  List remotes: flatpak remotes"
-    echo "  Add remote: flatpak remote-add NAME URL"
-    echo "  List apps: flatpak remote-ls REMOTE_NAME"
+    echo "  Clean cache: sudo dnf clean all"
+    echo "  Rebuild metadata: sudo dnf makecache"
+    echo "  Test: dnf repolist"
 }
 
 # STEP 2
 show_step_2() {
     cat << 'EOF'
-TASK: Work with Flatpak remotes
+TASK: Clean and rebuild DNF cache
 
-Flatpak remotes are repositories that provide applications. Learn to list,
-add, and explore remotes.
+Now that repositories work, clean up the DNF cache and rebuild metadata.
 
 Requirements:
-  • List current Flatpak remotes
-  • Understand remote repository structure
-  • Optionally add Fedora remote if not present
-  • List applications in a remote
-  • Document in /tmp/flatpak-lab/remotes.txt
+  • Remove all cached data: dnf clean all
+  • Download fresh metadata: dnf makecache
+  • Verify cache directory is clean
+  • Test that DNF operations are fast and clean
 
-Commands to explore:
-  • flatpak remotes
-  • flatpak remote-ls
-  • flatpak remote-add
+Workflow:
+  1. Clean all DNF cache
+  2. Rebuild repository metadata
+  3. Verify operations work smoothly
 
-Note: Adding remotes requires understanding OCI registries
-Common remote: oci+https://registry.fedoraproject.org
-
-Explore:
-  • What does OCI stand for?
-  • How many remotes are configured?
-  • What applications are available?
+This fixes stale metadata and corrupted cache files.
 EOF
 }
 
 validate_step_2() {
-    if [ ! -f /tmp/flatpak-lab/remotes.txt ]; then
+    # Check if the broken cache marker was removed
+    # (this indicates they cleaned the cache)
+    if [ -f /var/cache/dnf/.broken-cache-marker ]; then
         echo ""
-        print_color "$RED" "✗ remotes.txt not found"
+        print_color "$RED" "✗ DNF cache not cleaned"
+        echo "  Hint: Run dnf clean all"
         return 1
     fi
     
-    if [ ! -s /tmp/flatpak-lab/remotes.txt ]; then
+    # Check if metadata exists (indicates makecache was run)
+    if ! ls /var/cache/dnf/*/repodata/repomd.xml >/dev/null 2>&1; then
         echo ""
-        print_color "$RED" "✗ remotes.txt is empty"
-        return 1
+        print_color "$YELLOW" "  Warning: Metadata may not be rebuilt"
+        echo "  Hint: Run dnf makecache"
     fi
     
     return 0
@@ -322,74 +307,77 @@ solution_step_2() {
 
 SOLUTION:
 ─────────
-List remotes:
-  flatpak remotes
-  flatpak remotes -d
+Step 1: Clean all cache
+  sudo dnf clean all
 
-Add Fedora remote (if desired):
-  flatpak remote-add --if-not-exists fedora oci+https://registry.fedoraproject.org
+Step 2: Rebuild metadata
+  sudo dnf makecache
 
-List applications in remote:
-  flatpak remote-ls fedora --app
-
-Document:
-  flatpak remotes -d > /tmp/flatpak-lab/remotes.txt
-  echo "" >> /tmp/flatpak-lab/remotes.txt
-  echo "=== AVAILABLE APPLICATIONS ===" >> /tmp/flatpak-lab/remotes.txt
-  flatpak remote-ls --app 2>/dev/null | head -20 >> /tmp/flatpak-lab/remotes.txt
+Step 3: Verify
+  ls /var/cache/dnf/
+  dnf repolist
 
 Understanding:
-  OCI: Open Container Initiative
-  Remotes stored in /etc/flatpak/remotes.d/
-  Each remote has metadata updated daily
-  --if-not-exists prevents duplicate adds
+  dnf clean all removes:
+  - Downloaded packages
+  - Repository metadata
+  - Database cache
+
+  dnf makecache:
+  - Downloads fresh metadata
+  - Prepares for fast operations
+
+When to clean cache:
+  - After repository changes
+  - When seeing stale package info
+  - After network issues
+  - For disk space recovery
 
 EOF
 }
 
 hint_step_3() {
-    echo "  Search: flatpak search KEYWORD"
-    echo "  Show info: flatpak info APP_ID"
-    echo "  Note: Search requires configured remotes"
+    echo "  Test database: rpm -qa | head"
+    echo "  Verify package: rpm -V tree"
+    echo "  Check location: ls /var/lib/rpm/"
 }
 
 # STEP 3
 show_step_3() {
     cat << 'EOF'
-TASK: Search and explore Flatpak applications
+TASK: Verify RPM database integrity
 
-Learn to search for Flatpak applications and view their information.
+Confirm the RPM database is healthy and packages are intact.
 
 Requirements:
-  • Search for applications by keyword
-  • View information about an application
-  • Understand application ID format
-  • Document in /tmp/flatpak-lab/search-results.txt
+  • Query the RPM database
+  • Verify an installed package
+  • Check database location
+  • Understand database health
 
-Commands to use:
-  • flatpak search KEYWORD
-  • flatpak info APP_ID
+Workflow:
+  1. Test RPM database by querying packages
+  2. Verify the tree package integrity
+  3. Check RPM database location
+  4. Confirm database is healthy
 
-Explore:
-  • What is an application ID?
-  • How are Flatpak apps named?
-  • What information does flatpak info show?
-
-Note: This is exploration only, no installation required
+This ensures the foundational package database is working correctly.
 EOF
 }
 
 validate_step_3() {
-    if [ ! -f /tmp/flatpak-lab/search-results.txt ]; then
+    # Test RPM database works
+    if ! rpm -qa >/dev/null 2>&1; then
         echo ""
-        print_color "$RED" "✗ search-results.txt not found"
+        print_color "$RED" "✗ RPM database has issues"
         return 1
     fi
     
-    if [ ! -s /tmp/flatpak-lab/search-results.txt ]; then
+    # Test that tree package exists and is verified
+    if ! rpm -q tree >/dev/null 2>&1; then
         echo ""
-        print_color "$RED" "✗ search-results.txt is empty"
-        return 1
+        print_color "$YELLOW" "  Note: tree package not found"
+        echo "  This is okay if you removed it"
     fi
     
     return 0
@@ -400,82 +388,87 @@ solution_step_3() {
 
 SOLUTION:
 ─────────
-Search for applications:
-  flatpak search firefox
-  flatpak search editor
+Step 1: Test RPM database
+  rpm -qa | head -20
+  rpm -qa | wc -l
 
-View app information:
-  flatpak info org.mozilla.firefox
+Step 2: Verify package integrity
+  rpm -V tree
 
-Document:
-  flatpak search editor > /tmp/flatpak-lab/search-results.txt 2>&1
-  echo "" >> /tmp/flatpak-lab/search-results.txt
-  echo "=== APPLICATION INFO EXAMPLE ===" >> /tmp/flatpak-lab/search-results.txt
-  echo "Command: flatpak info APP_ID" >> /tmp/flatpak-lab/search-results.txt
+Step 3: Check database location
+  ls -lh /var/lib/rpm/
 
-Understanding:
-  Application ID format: org.domain.appname
-  Examples: org.mozilla.firefox, org.gnome.gedit
-  Search queries remote metadata
-  Info shows version, runtime, permissions
+Step 4: Understanding verification
+  rpm -V tree output:
+  - No output = package intact
+  - S = Size changed
+  - M = Mode changed
+  - 5 = MD5 checksum changed
+  - L = Symlink changed
+  - U = User changed
+  - G = Group changed
+  - T = Modification time changed
+
+Database health checks:
+  - rpm -qa should complete quickly
+  - No errors during queries
+  - Verification completes successfully
+
+When to rebuild database:
+  - rpm commands hang
+  - Database corruption errors
+  - Inconsistent query results
+  Command: rpm --rebuilddb
 
 EOF
 }
 
 hint_step_4() {
-    echo "  List repos: ls /etc/yum.repos.d/"
-    echo "  Try dnf: dnf repolist"
-    echo "  Fix: Disable or remove broken-test.repo"
+    echo "  Check version: flatpak --version"
+    echo "  Add remote: flatpak remote-add --if-not-exists NAME URL"
+    echo "  List remotes: flatpak remotes"
 }
 
 # STEP 4
 show_step_4() {
     cat << 'EOF'
-TASK: Troubleshoot DNF repository issues
+TASK: Install and configure Flatpak
 
-A broken repository has been configured. Practice identifying and fixing
-repository problems that prevent DNF operations.
+Set up Flatpak as an alternative packaging system.
 
 Requirements:
-  • Find the broken repository file
-  • Try a DNF operation and observe the error
-  • Fix the issue by disabling or removing the repo
-  • Verify DNF works after fix
-  • Document process in /tmp/flatpak-lab/dnf-troubleshooting.txt
+  • Verify Flatpak is installed
+  • Add the Fedora registry as a remote
+  • List configured remotes
+  • Search for an application
 
-Troubleshooting steps:
-  1. Identify broken repo in /etc/yum.repos.d/
-  2. Attempt: dnf repolist
-  3. Observe error message
-  4. Fix: disable enabled=0 or remove file
-  5. Verify: dnf repolist succeeds
+Workflow:
+  1. Check Flatpak installation
+  2. Add Fedora remote: oci+https://registry.fedoraproject.org
+  3. Verify remote is added
+  4. Search for applications
 
-Explore:
-  • What errors indicate repository problems?
-  • How do you disable vs remove a repo?
-  • Where are error details logged?
+Remote URL to use:
+  oci+https://registry.fedoraproject.org
+
+Remote name to use:
+  fedora
 EOF
 }
 
 validate_step_4() {
-    # Check if broken repo is fixed (disabled or removed)
-    local broken_enabled=0
-    if [ -f /etc/yum.repos.d/broken-test.repo ]; then
-        if grep -q "enabled=1" /etc/yum.repos.d/broken-test.repo 2>/dev/null; then
-            broken_enabled=1
-        fi
-    fi
-    
-    if [ $broken_enabled -eq 1 ]; then
+    # Check Flatpak is installed
+    if ! command -v flatpak >/dev/null 2>&1; then
         echo ""
-        print_color "$RED" "✗ Broken repository still enabled"
-        echo "  Fix: Disable or remove /etc/yum.repos.d/broken-test.repo"
+        print_color "$RED" "✗ Flatpak not installed"
         return 1
     fi
     
-    if [ ! -f /tmp/flatpak-lab/dnf-troubleshooting.txt ]; then
+    # Check if fedora remote exists
+    if ! flatpak remotes | grep -q "fedora"; then
         echo ""
-        print_color "$RED" "✗ dnf-troubleshooting.txt not found"
+        print_color "$RED" "✗ Fedora remote not added"
+        echo "  Hint: flatpak remote-add --if-not-exists fedora oci+https://registry.fedoraproject.org"
         return 1
     fi
     
@@ -487,89 +480,81 @@ solution_step_4() {
 
 SOLUTION:
 ─────────
-Identify broken repo:
-  ls /etc/yum.repos.d/
-  cat /etc/yum.repos.d/broken-test.repo
+Step 1: Verify Flatpak
+  flatpak --version
+  which flatpak
 
-Attempt DNF operation:
-  dnf repolist
-  # Observe error about broken-test repository
+Step 2: Add Fedora remote
+  flatpak remote-add --if-not-exists fedora oci+https://registry.fedoraproject.org
 
-Fix option 1 - Disable:
-  sudo vi /etc/yum.repos.d/broken-test.repo
-  # Change enabled=1 to enabled=0
+Step 3: List remotes
+  flatpak remotes
+  flatpak remotes -d
 
-Fix option 2 - Remove:
-  sudo rm /etc/yum.repos.d/broken-test.repo
+Step 4: Search applications
+  flatpak search firefox
+  flatpak search gimp
 
-Verify fix:
-  dnf repolist
+Understanding Flatpak:
+  Architecture:
+  - Container-based applications
+  - Includes all dependencies
+  - Sandboxed execution
+  - Cross-distribution
 
-Document:
-  cat > /tmp/flatpak-lab/dnf-troubleshooting.txt << 'ENDFILE'
-Problem: broken-test repository with invalid URL
-Error: Cannot retrieve repository metadata
-Fix: Disabled broken repository
-Result: DNF operations successful
-ENDFILE
+  Remotes:
+  - OCI registries with applications
+  - Similar to DNF repositories
+  - Common: Flathub, Fedora
 
-Understanding:
-  Repository errors prevent all DNF operations
-  Check /var/log/dnf.log for details
-  enabled=0 disables repository
-  Removing .repo file permanent solution
-  Can use --disablerepo flag as workaround
+  Application IDs:
+  - Format: org.domain.appname
+  - Example: org.mozilla.firefox
+
+  When to use:
+  - Desktop applications
+  - User-level installs
+  - Need latest versions
+  - Cross-platform apps
 
 EOF
 }
 
 hint_step_5() {
-    echo "  Check database: rpm -qa | wc -l"
-    echo "  Verify package: rpm -V PACKAGE"
-    echo "  Rebuild db: rpm --rebuilddb"
+    echo "  Install with DNF: sudo dnf install nano"
+    echo "  Check size: rpm -qi nano | grep Size"
+    echo "  Remove: sudo dnf remove nano"
 }
 
 # STEP 5
 show_step_5() {
     cat << 'EOF'
-TASK: Troubleshoot RPM database issues
+TASK: Compare packaging systems
 
-Learn to identify and resolve common RPM database problems. Understand when
-database rebuilding is necessary.
+Install a small package with DNF and understand the differences
+between DNF and Flatpak packaging.
 
 Requirements:
-  • Verify RPM database is functional
-  • Learn to check package integrity
-  • Understand database rebuild process
-  • Document in /tmp/flatpak-lab/rpm-troubleshooting.txt
+  • Install nano with DNF
+  • Check package size and dependencies
+  • Remove the package
+  • Compare with Flatpak approach
 
-Commands to explore:
-  • rpm -qa: Query all packages (tests database)
-  • rpm -V PACKAGE: Verify package integrity
-  • rpm --rebuilddb: Rebuild database indexes
-  • rpm -q --verify bash: Verify specific package
+Workflow:
+  1. Install nano using DNF
+  2. Check package information
+  3. Verify it's installed
+  4. Remove the package
+  5. Understand DNF vs Flatpak trade-offs
 
-Explore:
-  • Where is RPM database stored?
-  • What causes database corruption?
-  • When should you rebuild the database?
-
-Note: Do not actually rebuild unless necessary
+This demonstrates traditional package management workflow.
 EOF
 }
 
 validate_step_5() {
-    if [ ! -f /tmp/flatpak-lab/rpm-troubleshooting.txt ]; then
-        echo ""
-        print_color "$RED" "✗ rpm-troubleshooting.txt not found"
-        return 1
-    fi
-    
-    if [ ! -s /tmp/flatpak-lab/rpm-troubleshooting.txt ]; then
-        echo ""
-        print_color "$RED" "✗ rpm-troubleshooting.txt is empty"
-        return 1
-    fi
+    # We don't require nano to be installed at validation
+    # Just that they understand the process
+    # Check if they tried installing (it's okay if removed)
     
     return 0
 }
@@ -579,162 +564,60 @@ solution_step_5() {
 
 SOLUTION:
 ─────────
-Test RPM database:
-  rpm -qa | wc -l
-  # Should return count of packages
+Step 1: Install with DNF
+  sudo dnf install -y nano
 
-Verify package integrity:
-  rpm -V bash
-  # No output means package is intact
+Step 2: Check package info
+  rpm -qi nano
+  rpm -ql nano | head
+  rpm -qR nano
 
-Check specific files:
-  rpm -V --noconfig bash
-  # Ignore config file changes
+Step 3: Verify installation
+  which nano
+  nano --version
 
-Document:
-  cat > /tmp/flatpak-lab/rpm-troubleshooting.txt << 'ENDFILE'
-RPM DATABASE TROUBLESHOOTING
+Step 4: Remove package
+  sudo dnf remove -y nano
 
-Database location: /var/lib/rpm/
+Step 5: Compare approaches
 
-Test database:
-  rpm -qa | wc -l
+DNF (traditional):
+  Pros:
+  - Tight system integration
+  - Smaller package size
+  - Shared libraries
+  - Distribution tested
+  
+  Cons:
+  - Distribution specific
+  - Dependency conflicts possible
+  - Requires root for install
+  - System-wide only
 
-Verify package:
-  rpm -V PACKAGE
+Flatpak (container):
+  Pros:
+  - Cross-distribution
+  - Isolated dependencies
+  - User-level installs possible
+  - Sandboxed security
+  
+  Cons:
+  - Larger downloads
+  - More disk space
+  - Less system integration
+  - Best for desktop apps
 
-Rebuild database (if corrupted):
-  sudo rpm --rebuilddb
+Use DNF for:
+  - System packages
+  - Server software
+  - Daemons and services
+  - CLI tools
 
-Common issues:
-- Database locks from interrupted operations
-- Corruption from system crashes
-- Permission problems
-
-Signs of corruption:
-- rpm commands hang
-- Errors about database
-- Inconsistent query results
-
-When to rebuild:
-- After database corruption
-- When queries behave strangely
-- As last resort for rpm issues
-ENDFILE
-
-Understanding:
-  RPM database: /var/lib/rpm/
-  Stores package metadata and file ownership
-  Corruption rare but serious
-  Always backup before rebuild
-  rpm -V checks file integrity
-
-EOF
-}
-
-hint_step_6() {
-    echo "  Clean cache: dnf clean all"
-    echo "  Rebuild metadata: dnf makecache"
-    echo "  Test: dnf repolist"
-}
-
-# STEP 6
-show_step_6() {
-    cat << 'EOF'
-TASK: Practice DNF cache and metadata troubleshooting
-
-Learn to manage DNF cache and metadata. Understand when cache cleaning
-resolves issues.
-
-Requirements:
-  • Clean DNF cache
-  • Rebuild repository metadata
-  • Understand cache location
-  • Test DNF after cleaning
-  • Document in /tmp/flatpak-lab/cache-troubleshooting.txt
-
-Commands to use:
-  • dnf clean all
-  • dnf makecache
-  • dnf repolist
-
-Explore:
-  • Where is DNF cache stored?
-  • What does makecache do?
-  • When should you clean cache?
-EOF
-}
-
-validate_step_6() {
-    if [ ! -f /tmp/flatpak-lab/cache-troubleshooting.txt ]; then
-        echo ""
-        print_color "$RED" "✗ cache-troubleshooting.txt not found"
-        return 1
-    fi
-    
-    if [ ! -s /tmp/flatpak-lab/cache-troubleshooting.txt ]; then
-        echo ""
-        print_color "$RED" "✗ cache-troubleshooting.txt is empty"
-        return 1
-    fi
-    
-    return 0
-}
-
-solution_step_6() {
-    cat << 'EOF'
-
-SOLUTION:
-─────────
-Clean DNF cache:
-  sudo dnf clean all
-
-Rebuild metadata cache:
-  sudo dnf makecache
-
-Test DNF:
-  dnf repolist
-
-Document:
-  cat > /tmp/flatpak-lab/cache-troubleshooting.txt << 'ENDFILE'
-DNF CACHE TROUBLESHOOTING
-
-Cache location: /var/cache/dnf/
-
-Clean cache:
-  dnf clean all
-  - Removes all cached data
-  - Removes downloaded packages
-  - Removes metadata
-
-Rebuild cache:
-  dnf makecache
-  - Downloads fresh metadata
-  - Updates repository information
-
-When to clean cache:
-- Repository metadata errors
-- After repository configuration changes
-- Stale package information
-- Disk space recovery
-
-Cache types:
-- metadata: Repository information
-- packages: Downloaded RPMs
-- dbcache: Database cache
-
-Best practices:
-- Clean after repo changes
-- Use makecache to refresh
-- Check /var/log/dnf.log for issues
-ENDFILE
-
-Understanding:
-  DNF caches metadata for performance
-  Stale cache causes issues
-  clean all removes everything
-  makecache rebuilds metadata
-  Happens automatically periodically
+Use Flatpak for:
+  - Desktop applications
+  - GUI programs
+  - Latest software versions
+  - User applications
 
 EOF
 }
@@ -744,87 +627,69 @@ EOF
 #############################################################################
 validate() {
     local score=0
-    local total=6
+    local total=5
     
-    echo "Checking your Flatpak and troubleshooting work..."
+    echo "Checking your package management troubleshooting..."
     echo ""
     
-    # CHECK 1: Flatpak setup
-    print_color "$CYAN" "[1/$total] Checking Flatpak setup..."
-    if [ -f /tmp/flatpak-lab/flatpak-setup.txt ] && \
-       [ -s /tmp/flatpak-lab/flatpak-setup.txt ]; then
-        print_color "$GREEN" "  ✓ Flatpak setup documented"
-        ((score++))
-    else
-        print_color "$RED" "  ✗ Flatpak setup not documented"
-        print_color "$YELLOW" "  Hint: Use flatpak --version and flatpak remotes"
-    fi
-    echo ""
-    
-    # CHECK 2: Flatpak remotes
-    print_color "$CYAN" "[2/$total] Checking Flatpak remotes..."
-    if [ -f /tmp/flatpak-lab/remotes.txt ] && \
-       [ -s /tmp/flatpak-lab/remotes.txt ]; then
-        print_color "$GREEN" "  ✓ Flatpak remotes documented"
-        ((score++))
-    else
-        print_color "$RED" "  ✗ Flatpak remotes not documented"
-        print_color "$YELLOW" "  Hint: Use flatpak remotes and flatpak remote-ls"
-    fi
-    echo ""
-    
-    # CHECK 3: Flatpak search
-    print_color "$CYAN" "[3/$total] Checking Flatpak search..."
-    if [ -f /tmp/flatpak-lab/search-results.txt ] && \
-       [ -s /tmp/flatpak-lab/search-results.txt ]; then
-        print_color "$GREEN" "  ✓ Flatpak search documented"
-        ((score++))
-    else
-        print_color "$RED" "  ✗ Flatpak search not documented"
-        print_color "$YELLOW" "  Hint: Use flatpak search"
-    fi
-    echo ""
-    
-    # CHECK 4: DNF repository troubleshooting
-    print_color "$CYAN" "[4/$total] Checking DNF repository fix..."
+    # CHECK 1: Repository fixed
+    print_color "$CYAN" "[1/$total] Checking repository fix..."
     local broken_enabled=0
-    if [ -f /etc/yum.repos.d/broken-test.repo ]; then
-        if grep -q "enabled=1" /etc/yum.repos.d/broken-test.repo 2>/dev/null; then
+    if [ -f /etc/yum.repos.d/broken-repo.repo ]; then
+        if grep -q "enabled=1" /etc/yum.repos.d/broken-repo.repo 2>/dev/null; then
             broken_enabled=1
         fi
     fi
     
-    if [ $broken_enabled -eq 0 ] && \
-       [ -f /tmp/flatpak-lab/dnf-troubleshooting.txt ]; then
-        print_color "$GREEN" "  ✓ DNF repository issue resolved"
+    if [ $broken_enabled -eq 0 ]; then
+        print_color "$GREEN" "  ✓ Broken repository fixed"
         ((score++))
     else
-        print_color "$RED" "  ✗ DNF repository not fixed"
-        print_color "$YELLOW" "  Hint: Disable or remove broken-test.repo"
+        print_color "$RED" "  ✗ Repository still broken"
+        print_color "$YELLOW" "  Fix: Disable or remove broken-repo.repo"
     fi
     echo ""
     
-    # CHECK 5: RPM troubleshooting
-    print_color "$CYAN" "[5/$total] Checking RPM troubleshooting..."
-    if [ -f /tmp/flatpak-lab/rpm-troubleshooting.txt ] && \
-       [ -s /tmp/flatpak-lab/rpm-troubleshooting.txt ]; then
-        print_color "$GREEN" "  ✓ RPM troubleshooting documented"
+    # CHECK 2: Cache cleaned
+    print_color "$CYAN" "[2/$total] Checking DNF cache..."
+    if [ ! -f /var/cache/dnf/.broken-cache-marker ]; then
+        print_color "$GREEN" "  ✓ DNF cache cleaned"
         ((score++))
     else
-        print_color "$RED" "  ✗ RPM troubleshooting not documented"
-        print_color "$YELLOW" "  Hint: Document RPM database verification"
+        print_color "$RED" "  ✗ DNF cache not cleaned"
+        print_color "$YELLOW" "  Fix: Run dnf clean all"
     fi
     echo ""
     
-    # CHECK 6: DNF cache troubleshooting
-    print_color "$CYAN" "[6/$total] Checking DNF cache troubleshooting..."
-    if [ -f /tmp/flatpak-lab/cache-troubleshooting.txt ] && \
-       [ -s /tmp/flatpak-lab/cache-troubleshooting.txt ]; then
-        print_color "$GREEN" "  ✓ DNF cache troubleshooting documented"
+    # CHECK 3: RPM database
+    print_color "$CYAN" "[3/$total] Checking RPM database..."
+    if rpm -qa >/dev/null 2>&1; then
+        print_color "$GREEN" "  ✓ RPM database healthy"
         ((score++))
     else
-        print_color "$RED" "  ✗ DNF cache troubleshooting not documented"
-        print_color "$YELLOW" "  Hint: Use dnf clean and dnf makecache"
+        print_color "$RED" "  ✗ RPM database has issues"
+        print_color "$YELLOW" "  Fix: Check rpm commands work"
+    fi
+    echo ""
+    
+    # CHECK 4: Flatpak configured
+    print_color "$CYAN" "[4/$total] Checking Flatpak configuration..."
+    if command -v flatpak >/dev/null 2>&1 && flatpak remotes | grep -q "fedora"; then
+        print_color "$GREEN" "  ✓ Flatpak configured with remote"
+        ((score++))
+    else
+        print_color "$RED" "  ✗ Flatpak not fully configured"
+        print_color "$YELLOW" "  Fix: Add fedora remote"
+    fi
+    echo ""
+    
+    # CHECK 5: Understanding demonstrated
+    print_color "$CYAN" "[5/$total] Checking package management understanding..."
+    if [ $score -ge 3 ]; then
+        print_color "$GREEN" "  ✓ Demonstrated troubleshooting skills"
+        ((score++))
+    else
+        print_color "$YELLOW" "  Complete previous steps to demonstrate understanding"
     fi
     echo ""
     
@@ -835,13 +700,12 @@ validate() {
     if [ $score -eq $total ]; then
         print_color "$GREEN" "STATUS: ✓ PASSED"
         echo ""
-        echo "Excellent! You now understand:"
-        echo "  • Flatpak installation and configuration"
-        echo "  • Managing Flatpak remotes"
-        echo "  • Searching for Flatpak applications"
-        echo "  • Troubleshooting DNF repository issues"
-        echo "  • RPM database verification"
-        echo "  • DNF cache management"
+        echo "Excellent! You successfully:"
+        echo "  • Fixed DNF repository issues"
+        echo "  • Cleaned and rebuilt DNF cache"
+        echo "  • Verified RPM database integrity"
+        echo "  • Configured Flatpak with remote"
+        echo "  • Understand both packaging systems"
     else
         print_color "$YELLOW" "STATUS: ⚠ INCOMPLETE ($score/$total checks passed)"
         echo ""
@@ -864,200 +728,75 @@ solution() {
 COMPLETE SOLUTION WALKTHROUGH
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-OBJECTIVE 1: Flatpak setup
+STEP 1: Fix broken repository
 ─────────────────────────────────────────────────────────────────
-Check installation:
-  flatpak --version
-  rpm -q flatpak
-
-List remotes:
-  flatpak remotes
-
-Document:
-  flatpak --version > /tmp/flatpak-lab/flatpak-setup.txt
-  flatpak remotes >> /tmp/flatpak-lab/flatpak-setup.txt
+dnf repolist
+sudo vi /etc/yum.repos.d/broken-repo.repo
+# Change enabled=1 to enabled=0
+dnf repolist
 
 
-OBJECTIVE 2: Flatpak remotes
+STEP 2: Clean DNF cache
 ─────────────────────────────────────────────────────────────────
-List remotes:
-  flatpak remotes -d
-
-Add remote (optional):
-  flatpak remote-add --if-not-exists fedora oci+https://registry.fedoraproject.org
-
-List apps:
-  flatpak remote-ls fedora --app
+sudo dnf clean all
+sudo dnf makecache
+dnf repolist
 
 
-OBJECTIVE 3: Search applications
+STEP 3: Verify RPM database
 ─────────────────────────────────────────────────────────────────
-Search:
-  flatpak search firefox
-
-Show info:
-  flatpak info org.mozilla.firefox
+rpm -qa | head
+rpm -V tree
+ls /var/lib/rpm/
 
 
-OBJECTIVE 4: Fix DNF repository
+STEP 4: Configure Flatpak
 ─────────────────────────────────────────────────────────────────
-Identify problem:
-  dnf repolist
-  # Observe error
-
-Fix - Disable:
-  sudo vi /etc/yum.repos.d/broken-test.repo
-  # Change enabled=1 to enabled=0
-
-Fix - Remove:
-  sudo rm /etc/yum.repos.d/broken-test.repo
-
-Verify:
-  dnf repolist
+flatpak --version
+flatpak remote-add --if-not-exists fedora oci+https://registry.fedoraproject.org
+flatpak remotes
+flatpak search firefox
 
 
-OBJECTIVE 5: RPM troubleshooting
+STEP 5: Compare systems
 ─────────────────────────────────────────────────────────────────
-Test database:
-  rpm -qa | wc -l
-
-Verify package:
-  rpm -V bash
-
-Rebuild if needed:
-  sudo rpm --rebuilddb
+sudo dnf install -y nano
+rpm -qi nano
+sudo dnf remove -y nano
 
 
-OBJECTIVE 6: DNF cache
-─────────────────────────────────────────────────────────────────
-Clean cache:
-  sudo dnf clean all
-
-Rebuild metadata:
-  sudo dnf makecache
-
-Test:
-  dnf repolist
-
-
-CONCEPTUAL UNDERSTANDING
+KEY CONCEPTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Flatpak architecture:
-  Container-based application delivery
-  Sandboxed execution environment
-  Runtime dependencies included
-  Cross-distribution compatibility
-
-Flatpak vs DNF:
-  Flatpak:
-  - Desktop applications
-  - User-level installs possible
-  - Sandboxed security
-  - Distribution-independent
-  
-  DNF:
-  - System packages
-  - Server software
-  - System integration
-  - RHEL-specific packages
-
-Flatpak remotes:
-  OCI registries containing applications
-  Stored in /etc/flatpak/remotes.d/
-  Common: Flathub, Fedora Registry
-  Updated automatically
-
-DNF repository troubleshooting:
-  Common causes:
-  - Invalid URLs
-  - Network issues
-  - Missing GPG keys
-  - Incorrect configuration
-  
-  Solutions:
-  - Disable problematic repos
-  - Fix configuration
-  - Use --disablerepo temporarily
+Repository troubleshooting:
+  - Check /etc/yum.repos.d/
+  - Disable with enabled=0
   - Check /var/log/dnf.log
 
-RPM database issues:
-  Location: /var/lib/rpm/
-  
-  Problems:
-  - Corruption from crashes
-  - Lock files from interrupted ops
-  - Permission issues
-  
-  Solutions:
-  - Remove lock files
-  - Rebuild database
-  - Verify integrity
+Cache management:
+  - Location: /var/cache/dnf/
+  - Clean: dnf clean all
+  - Rebuild: dnf makecache
 
-DNF cache management:
-  Location: /var/cache/dnf/
-  
-  When to clean:
-  - Stale metadata
-  - After repo changes
-  - Disk space issues
-  - Strange package behavior
-  
-  Commands:
-  - dnf clean all: Remove everything
-  - dnf clean metadata: Remove metadata only
-  - dnf makecache: Rebuild metadata
+RPM database:
+  - Location: /var/lib/rpm/
+  - Test: rpm -qa
+  - Verify: rpm -V PACKAGE
+  - Rebuild: rpm --rebuilddb
 
-
-COMMON MISTAKES & TROUBLESHOOTING
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Mistake 1: Not cleaning cache after repo changes
-  Result: Stale metadata causes issues
-  Fix: dnf clean all after changes
-
-Mistake 2: Rebuilding RPM database unnecessarily
-  Result: Wasted time
-  Fix: Only rebuild when corrupted
-
-Mistake 3: Removing repos instead of disabling
-  Result: Permanent removal
-  Fix: Disable with enabled=0 first
-
-Mistake 4: Confusing Flatpak and DNF use cases
-  Result: Wrong tool for the job
-  Fix: Use Flatpak for desktop, DNF for system
+Flatpak vs DNF:
+  DNF: System packages, tight integration
+  Flatpak: Desktop apps, sandboxed
 
 
 EXAM TIPS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Flatpak commands:
-1. flatpak remotes - List configured remotes
-2. flatpak search - Find applications
-3. flatpak install - Install application
-4. flatpak list - Show installed apps
-5. flatpak remove - Uninstall application
-
-DNF troubleshooting:
-1. Check /var/log/dnf.log for details
-2. dnf clean all fixes many cache issues
-3. Disable broken repos with enabled=0
-4. Use --disablerepo for temporary fix
-5. dnf repolist shows repo status
-
-RPM troubleshooting:
-1. rpm -qa tests database
-2. rpm -V verifies package integrity
-3. rpm --rebuilddb fixes corruption
-4. Check /var/lib/rpm/ for lock files
-5. Database issues are rare
-
-Quick fixes:
-  Repository error → Disable repo or clean cache
-  Package conflict → Check dependencies
-  Metadata error → dnf clean all; dnf makecache
-  Database error → rpm --rebuilddb
+1. DNF fails? Check repositories first
+2. Stale metadata? Clean cache
+3. Package issues? Verify with rpm -V
+4. Always check /var/log/dnf.log
+5. Flatpak for desktop, DNF for system
 
 EOF
 }
@@ -1068,13 +807,18 @@ EOF
 cleanup_lab() {
     echo "Cleaning up lab environment..."
     
-    # Remove broken test repository
-    rm -f /etc/yum.repos.d/broken-test.repo 2>/dev/null || true
+    # Remove broken repository
+    rm -f /etc/yum.repos.d/broken-repo.repo 2>/dev/null || true
+    
+    # Remove cache marker
+    rm -f /var/cache/dnf/.broken-cache-marker 2>/dev/null || true
+    
+    # Remove test packages
+    dnf remove -y tree nano 2>/dev/null || true
     
     # Remove working directory
-    rm -rf /tmp/flatpak-lab 2>/dev/null || true
+    rm -rf /tmp/package-lab 2>/dev/null || true
     
-    echo "  ✓ Broken repository removed"
     echo "  ✓ All lab components removed"
 }
 
