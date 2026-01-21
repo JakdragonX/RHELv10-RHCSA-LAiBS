@@ -218,6 +218,13 @@ validate_step_1() {
     return 0
 }
 
+hint_step_1() {
+    echo "  List packages: dnf list available"
+    echo "  Search: dnf search KEYWORD"
+    echo "  Find provider: dnf provides */FILENAME"
+    echo "  Package info: dnf info PACKAGE"
+}
+
 solution_step_1() {
     cat << 'EOF'
 
@@ -616,12 +623,6 @@ Understanding:
 EOF
 }
 
-hint_step_6() {
-    echo "  Check updates: dnf check-update"
-    echo "  List repos: dnf repolist"
-    echo "  Disable repo: dnf --disablerepo=REPO_ID list"
-}
-
 # STEP 6
 show_step_6() {
     cat << 'EOF'
@@ -668,6 +669,12 @@ validate_step_6() {
     fi
     
     return 0
+}
+
+hint_step_6() {
+    echo "  Check updates: dnf check-update"
+    echo "  List repos: dnf repolist"
+    echo "  Disable temporarily: dnf --disablerepo=REPO_ID list"
 }
 
 solution_step_6() {
