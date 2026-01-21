@@ -635,23 +635,26 @@ Requirements:
   • Check for available updates (do not install)
   • List enabled repositories
   • Count how many repositories are enabled
-  • Temporarily disable a repo and list packages
-  • Re-enable repository
+  • Try listing packages with a repository disabled
+    Example: dnf --disablerepo=REPO_ID list available | head
+  • Verify repository still enabled after (flag was temporary)
   • Document in /tmp/dnf-lab/updates-repos.txt
 
 DNF update and repo commands:
   • dnf check-update: Show available updates
   • dnf repolist: List repositories
   • dnf repolist all: Show disabled repos too
-  • dnf --disablerepo=REPO: Temporarily disable
-  • dnf --enablerepo=REPO: Temporarily enable
+  • dnf --disablerepo=REPO COMMAND: Run command without repo
+  • dnf --enablerepo=REPO COMMAND: Run command with repo
 
 Explore:
   • How many packages have updates available?
   • What repositories are configured?
   • What happens when you disable all repos?
+  • Do runtime flags modify config files?
 
-Note: Using --disablerepo does not modify config files
+Note: --disablerepo and --enablerepo are flags for dnf commands,
+not standalone commands. Example: dnf --disablerepo=* list
 EOF
 }
 
@@ -674,7 +677,8 @@ validate_step_6() {
 hint_step_6() {
     echo "  Check updates: dnf check-update"
     echo "  List repos: dnf repolist"
-    echo "  Disable temporarily: dnf --disablerepo=REPO_ID list"
+    echo "  Disable repo example: dnf --disablerepo=appstream list available | head"
+    echo "  Note: --disablerepo is a flag, not a standalone command"
 }
 
 solution_step_6() {
@@ -691,8 +695,14 @@ List enabled repositories:
 Show all repositories:
   dnf repolist all
 
-Temporarily disable repo and list:
+Test with repository disabled (example):
+  dnf --disablerepo=appstream list available | head -20
+
+Test with all repos disabled except one:
   dnf --disablerepo=* --enablerepo=baseos list available | head -20
+
+Verify repo still enabled (flags are temporary):
+  dnf repolist
 
 Document:
   echo "=== AVAILABLE UPDATES ===" > /tmp/dnf-lab/updates-repos.txt
@@ -704,9 +714,16 @@ Document:
 Understanding:
   dnf check-update shows packages with updates
   Exit code 100 means updates available
-  --disablerepo and --enablerepo are runtime flags
+  --disablerepo and --enablerepo are FLAGS for dnf commands
+  They temporarily modify which repos are used
   Do not modify repository configuration files
+  Can combine multiple --disablerepo flags
   Useful for testing or troubleshooting
+
+Common patterns:
+  dnf --disablerepo=REPO install PACKAGE
+  dnf --disablerepo=* --enablerepo=REPO search PACKAGE
+  dnf --enablerepo=optional-repo install PACKAGE
 
 EOF
 }
@@ -913,8 +930,9 @@ List repos:
   dnf repolist
   dnf repolist all
 
-Disable repo temporarily:
-  dnf --disablerepo=appstream list
+Disable repo temporarily (must use with a command):
+  dnf --disablerepo=appstream list available
+  dnf --disablerepo=* --enablerepo=baseos search package
 
 
 CONCEPTUAL UNDERSTANDING
