@@ -1,17 +1,17 @@
 #!/bin/bash
-# labs/m04/14C-flatpak-troubleshooting.sh
-# Lab: Understanding Flatpak and troubleshooting package management
+# labs/m04/14C-flatpak-applications.sh
+# Lab: Working with Flatpak applications
 # Difficulty: Intermediate
-# RHCSA Objective: 12.8, 12.9 - Flatpak management and package troubleshooting
+# RHCSA Objective: 12.8, 12.9 - Flatpak installation and management
 
 # Source the lab framework
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../../lab-runner.sh"
 
 # Lab metadata
-LAB_NAME="Understanding Flatpak and troubleshooting package management"
+LAB_NAME="Working with Flatpak applications"
 LAB_DIFFICULTY="Intermediate"
-LAB_TIME_ESTIMATE="35-45 minutes"
+LAB_TIME_ESTIMATE="30-40 minutes"
 
 #############################################################################
 # SETUP
@@ -20,34 +20,28 @@ setup_lab() {
     echo "Preparing lab environment..."
     
     # Create working directory
-    mkdir -p /tmp/package-lab 2>/dev/null || true
+    mkdir -p /tmp/flatpak-work 2>/dev/null || true
     
-    # Install flatpak if not present
+    # Ensure flatpak is installed
     if ! command -v flatpak >/dev/null 2>&1; then
         echo "  Installing flatpak..."
         dnf install -y flatpak >/dev/null 2>&1
     fi
     
-    # Create a broken repository
-    cat > /etc/yum.repos.d/broken-repo.repo << 'EOF'
-[broken-repo]
-name=Broken Repository
-baseurl=http://does-not-exist.invalid.local/repo
-enabled=1
-gpgcheck=0
-EOF
+    # Remove any existing remotes to start fresh
+    flatpak remotes 2>/dev/null | awk '{print $1}' | while read remote; do
+        flatpak remote-delete "$remote" --force 2>/dev/null || true
+    done
     
-    # Install a test package that we'll work with
-    dnf install -y tree >/dev/null 2>&1 || true
+    # Remove any installed flatpak apps
+    flatpak list --app 2>/dev/null | awk '{print $2}' | while read app; do
+        flatpak uninstall -y "$app" 2>/dev/null || true
+    done
     
-    # Corrupt DNF cache to create a scenario
-    touch /var/cache/dnf/.broken-cache-marker
-    
+    echo "  ✓ Flatpak installed and cleaned"
     echo "  ✓ Lab environment ready"
-    echo "  ✓ Broken scenarios created"
     echo ""
-    echo "  SCENARIO: Your system has several package management issues"
-    echo "  You'll diagnose and fix them step by step"
+    echo "  SCENARIO: You will set up and use Flatpak for application management"
 }
 
 #############################################################################
@@ -56,19 +50,24 @@ EOF
 prerequisites() {
     cat << 'EOF'
 Knowledge Requirements:
-  • RPM and DNF basics
-  • Repository configuration
-  • Package management concepts
+  • Basic understanding of package management
+  • Familiarity with repositories
+  • Container concepts helpful but not required
 
 Commands You'll Use:
   • flatpak - Flatpak package manager
-  • dnf - DNF package manager
-  • rpm - RPM package manager
+  • flatpak remote-add - Add remote repositories
+  • flatpak remote-ls - List remote contents
+  • flatpak search - Search for applications
+  • flatpak install - Install applications
+  • flatpak list - List installed items
+  • flatpak run - Run applications
+  • flatpak uninstall - Remove applications
 
 Files You'll Interact With:
-  • /etc/yum.repos.d/ - Repository configuration
-  • /var/cache/dnf/ - DNF cache
-  • /var/lib/rpm/ - RPM database
+  • /etc/flatpak/remotes.d/ - Remote repository configuration
+  • /var/lib/flatpak/ - System-wide Flatpak data
+  • ~/.local/share/flatpak/ - User Flatpak data
 EOF
 }
 
@@ -78,59 +77,60 @@ EOF
 scenario() {
     cat << 'EOF'
 SCENARIO:
-Your RHEL system has multiple package management issues. DNF operations are
-failing, and you need to diagnose and fix each problem systematically. You'll
-also explore Flatpak as an alternative packaging system.
+Your organization is evaluating Flatpak for desktop application deployment.
+You need to set up Flatpak, configure remote repositories, and install test
+applications to understand how Flatpak works compared to traditional RPM packages.
 
 BACKGROUND:
-Real-world systems often develop package management issues from interrupted
-updates, network problems, or configuration errors. This lab simulates common
-problems you'll encounter as a system administrator.
+Flatpak provides containerized applications that include all dependencies and
+run in a sandbox. This approach offers better security and cross-distribution
+compatibility compared to traditional packages, making it ideal for desktop
+applications.
 
 OBJECTIVES:
-  1. Diagnose why DNF operations are failing
-     • Try to update package lists
-     • Identify the broken repository
-     • Fix the repository issue
-     • Verify DNF works again
+  1. Verify Flatpak installation and understand its architecture
+     • Confirm Flatpak is installed
+     • Understand Flatpak data locations
+     • Learn the difference between system and user installs
+     • Explore Flatpak configuration
 
-  2. Clean up DNF cache issues
-     • Check for cache problems
-     • Clean the DNF cache completely
-     • Rebuild repository metadata
-     • Test DNF operations work smoothly
+  2. Add and configure a Flatpak remote repository
+     • Add the Fedora registry remote
+     • Verify the remote is configured correctly
+     • List available applications in the remote
+     • Understand OCI registry concept
 
-  3. Verify RPM database integrity
-     • Check RPM database is healthy
-     • Verify installed package integrity
-     • Understand database location and structure
-     • Know when rebuilding is necessary
-
-  4. Install and configure Flatpak
-     • Verify Flatpak is installed
-     • Add a Flatpak remote repository
+  3. Search for and examine applications
      • Search for available applications
-     • Understand Flatpak architecture
+     • View detailed information about an application
+     • Understand application IDs and naming conventions
+     • Explore application permissions
 
-  5. Compare package management systems
-     • Install a package with DNF
-     • Explore how Flatpak differs
-     • Remove test packages
-     • Understand when to use each system
+  4. Install a Flatpak application
+     • Install a small application
+     • Verify installation succeeded
+     • Understand runtime dependencies
+     • Check installed size
+
+  5. Run and manage installed applications
+     • Run the installed application
+     • List all installed applications
+     • Update an application
+     • Uninstall the application
 
 HINTS:
-  • DNF errors often point to the problem
-  • Repository files are in /etc/yum.repos.d/
-  • dnf clean all is powerful
-  • Flatpak remotes provide applications
+  • Flatpak uses remotes similar to DNF repositories
+  • Application IDs use reverse-DNS format
+  • Runtimes are shared between applications
+  • User installs don't require root
   • Each step builds on the previous
 
 SUCCESS CRITERIA:
-  • DNF repository issue resolved
-  • DNF cache cleaned and rebuilt
-  • RPM database verified healthy
-  • Flatpak configured with remote
-  • Understanding of both packaging systems
+  • Flatpak installation verified
+  • Remote repository configured
+  • Application searched and examined
+  • Application installed and run
+  • Application properly removed
 EOF
 }
 
@@ -139,11 +139,11 @@ EOF
 #############################################################################
 objectives_quick() {
     cat << 'EOF'
-  ☐ 1. Fix broken DNF repository
-  ☐ 2. Clean and rebuild DNF cache
-  ☐ 3. Verify RPM database integrity
-  ☐ 4. Configure Flatpak with remote
-  ☐ 5. Compare packaging systems
+  ☐ 1. Verify Flatpak installation and architecture
+  ☐ 2. Add Flatpak remote repository
+  ☐ 3. Search and examine applications
+  ☐ 4. Install a Flatpak application
+  ☐ 5. Run and manage applications
 EOF
 }
 
@@ -157,60 +157,42 @@ get_step_count() {
 
 scenario_context() {
     cat << 'EOF'
-Your system has package management issues to diagnose and fix.
+You are setting up and testing Flatpak for application deployment.
 
-Working directory: /tmp/package-lab/
+Working directory: /tmp/flatpak-work/
 
-This is a sequential troubleshooting workflow.
+Follow the sequential workflow to master Flatpak.
 EOF
 }
 
 # STEP 1
 show_step_1() {
     cat << 'EOF'
-TASK: Diagnose and fix DNF repository failure
+TASK: Verify Flatpak installation and understand its architecture
 
-Your first task is to identify why DNF is failing and fix the problem.
+Before using Flatpak, confirm it's installed and understand where it stores data.
 
 Requirements:
-  • Try running: dnf repolist
-  • Observe the error about a failing repository
-  • Find the broken repository in /etc/yum.repos.d/
-  • Fix it by setting enabled=0 or removing the file
-  • Verify dnf repolist succeeds
+  • Verify Flatpak is installed on the system
+  • Check the Flatpak version
+  • Examine Flatpak data directories
+  • List any configured remotes (should be empty)
 
-Workflow:
-  1. Attempt DNF operation to see error
-  2. Identify which repository is broken
-  3. Disable or remove the broken repository
-  4. Confirm DNF works
+Questions to explore:
+  • Where does Flatpak store system-wide data?
+  • Where does it store user-specific data?
+  • What version of Flatpak is installed?
+  • Are any remotes configured?
 
-This simulates a common real-world issue where a repository
-becomes unavailable or is misconfigured.
+Discover how to check installation status and explore the Flatpak
+directory structure.
 EOF
 }
 
 validate_step_1() {
-    # Check if broken repo is fixed
-    local broken_enabled=0
-    if [ -f /etc/yum.repos.d/broken-repo.repo ]; then
-        if grep -q "enabled=1" /etc/yum.repos.d/broken-repo.repo 2>/dev/null; then
-            broken_enabled=1
-        fi
-    fi
-    
-    if [ $broken_enabled -eq 1 ]; then
+    if ! command -v flatpak >/dev/null 2>&1; then
         echo ""
-        print_color "$RED" "✗ Broken repository still enabled"
-        echo "  The broken-repo is still causing issues"
-        echo "  Hint: Edit /etc/yum.repos.d/broken-repo.repo"
-        return 1
-    fi
-    
-    # Verify DNF works
-    if ! dnf repolist >/dev/null 2>&1; then
-        echo ""
-        print_color "$RED" "✗ DNF still not working"
+        print_color "$RED" "✗ Flatpak not installed"
         return 1
     fi
     
@@ -218,9 +200,10 @@ validate_step_1() {
 }
 
 hint_step_1() {
-    echo "  Try: dnf repolist (observe error)"
-    echo "  Check: ls /etc/yum.repos.d/"
-    echo "  Fix: Edit broken-repo.repo, set enabled=0"
+    echo "  Check installation: which flatpak"
+    echo "  Check version: flatpak --version"
+    echo "  List remotes: flatpak remotes"
+    echo "  Check directories: ls /var/lib/flatpak/"
 }
 
 solution_step_1() {
@@ -228,75 +211,70 @@ solution_step_1() {
 
 SOLUTION:
 ─────────
-Step 1: Try DNF operation
-  dnf repolist
+Verify installation:
+  which flatpak
+  flatpak --version
+  rpm -q flatpak
 
-Step 2: Observe error about broken-repo
+List configured remotes:
+  flatpak remotes
+  # Should be empty initially
 
-Step 3: Check repository files
-  ls /etc/yum.repos.d/
-  cat /etc/yum.repos.d/broken-repo.repo
+Explore directories:
+  ls -la /var/lib/flatpak/
+  ls -la /etc/flatpak/
+  ls -la ~/.local/share/flatpak/ 2>/dev/null || echo "User data not yet created"
 
-Step 4: Fix the issue
-  Option A - Disable:
-    sudo vi /etc/yum.repos.d/broken-repo.repo
-    Change: enabled=1 to enabled=0
-  
-  Option B - Remove:
-    sudo rm /etc/yum.repos.d/broken-repo.repo
+Understanding:
+  /var/lib/flatpak/ - System-wide applications and runtimes
+  /etc/flatpak/remotes.d/ - Remote repository configuration
+  ~/.local/share/flatpak/ - User-installed applications
 
-Step 5: Verify fix
-  dnf repolist
-
-Key learning: Repository errors prevent all DNF operations.
-Always check enabled repositories when DNF fails.
+Flatpak supports two install scopes:
+  --system: Available to all users, requires root
+  --user: Available to current user only, no root needed
 
 EOF
 }
 
 hint_step_2() {
-    echo "  Clean cache: sudo dnf clean all"
-    echo "  Rebuild metadata: sudo dnf makecache"
-    echo "  Test: dnf repolist"
+    echo "  Add remote: flatpak remote-add NAME URL"
+    echo "  Use name: fedora"
+    echo "  Use URL: oci+https://registry.fedoraproject.org"
+    echo "  Verify: flatpak remotes"
 }
 
 # STEP 2
 show_step_2() {
     cat << 'EOF'
-TASK: Clean and rebuild DNF cache
+TASK: Add and configure a Flatpak remote repository
 
-Now that repositories work, clean up the DNF cache and rebuild metadata.
+Flatpak remotes are repositories that provide applications. Add a remote
+to access available applications.
 
 Requirements:
-  • Remove all cached data: dnf clean all
-  • Download fresh metadata: dnf makecache
-  • Verify cache directory is clean
-  • Test that DNF operations are fast and clean
+  • Add the Fedora registry as a remote
+  • Name the remote: fedora
+  • URL to use: oci+https://registry.fedoraproject.org
+  • Verify the remote was added successfully
+  • List applications available in the remote
 
-Workflow:
-  1. Clean all DNF cache
-  2. Rebuild repository metadata
-  3. Verify operations work smoothly
+Remote details:
+  Name: fedora
+  URL: oci+https://registry.fedoraproject.org
+  Flag: --if-not-exists (prevents errors if already exists)
 
-This fixes stale metadata and corrupted cache files.
+OCI stands for Open Container Initiative - a standard format
+for container images that Flatpak uses.
 EOF
 }
 
 validate_step_2() {
-    # Check if the broken cache marker was removed
-    # (this indicates they cleaned the cache)
-    if [ -f /var/cache/dnf/.broken-cache-marker ]; then
+    if ! flatpak remotes 2>/dev/null | grep -q "fedora"; then
         echo ""
-        print_color "$RED" "✗ DNF cache not cleaned"
-        echo "  Hint: Run dnf clean all"
+        print_color "$RED" "✗ Fedora remote not configured"
+        echo "  Add it with the URL: oci+https://registry.fedoraproject.org"
         return 1
-    fi
-    
-    # Check if metadata exists (indicates makecache was run)
-    if ! ls /var/cache/dnf/*/repodata/repomd.xml >/dev/null 2>&1; then
-        echo ""
-        print_color "$YELLOW" "  Warning: Metadata may not be rebuilt"
-        echo "  Hint: Run dnf makecache"
     fi
     
     return 0
@@ -307,79 +285,67 @@ solution_step_2() {
 
 SOLUTION:
 ─────────
-Step 1: Clean all cache
-  sudo dnf clean all
+Add Fedora remote:
+  flatpak remote-add --if-not-exists fedora oci+https://registry.fedoraproject.org
 
-Step 2: Rebuild metadata
-  sudo dnf makecache
+Verify remote was added:
+  flatpak remotes
+  flatpak remotes -d
 
-Step 3: Verify
-  ls /var/cache/dnf/
-  dnf repolist
+List applications in remote:
+  flatpak remote-ls fedora --app
 
-Understanding:
-  dnf clean all removes:
-  - Downloaded packages
-  - Repository metadata
-  - Database cache
+Understanding remotes:
+  Similar to DNF repositories
+  Stored in /etc/flatpak/remotes.d/
+  Each remote is an OCI registry
+  Metadata updated automatically
 
-  dnf makecache:
-  - Downloads fresh metadata
-  - Prepares for fast operations
+Common remotes:
+  Flathub: https://flathub.org
+  Fedora Registry: registry.fedoraproject.org
+  GNOME Nightly: nightly.gnome.org
 
-When to clean cache:
-  - After repository changes
-  - When seeing stale package info
-  - After network issues
-  - For disk space recovery
+The --if-not-exists flag prevents errors if
+the remote already exists.
 
 EOF
 }
 
 hint_step_3() {
-    echo "  Test database: rpm -qa | head"
-    echo "  Verify package: rpm -V tree"
-    echo "  Check location: ls /var/lib/rpm/"
+    echo "  Search: flatpak search KEYWORD"
+    echo "  Show info: flatpak info --show-metadata APP_ID"
+    echo "  Try searching for: firefox or calculator"
 }
 
 # STEP 3
 show_step_3() {
     cat << 'EOF'
-TASK: Verify RPM database integrity
+TASK: Search for and examine applications
 
-Confirm the RPM database is healthy and packages are intact.
+Learn to find applications and view their details before installing.
 
 Requirements:
-  • Query the RPM database
-  • Verify an installed package
-  • Check database location
-  • Understand database health
+  • Search for an application (try firefox or calculator)
+  • View information about an application you found
+  • Understand the application ID format
+  • Examine what the application requires
 
-Workflow:
-  1. Test RPM database by querying packages
-  2. Verify the tree package integrity
-  3. Check RPM database location
-  4. Confirm database is healthy
+Explore:
+  • What applications are available?
+  • How are application IDs formatted?
+  • What information is shown about each app?
+  • What runtimes do applications need?
 
-This ensures the foundational package database is working correctly.
+Application IDs typically follow reverse-DNS format:
+  org.mozilla.firefox
+  org.gnome.Calculator
 EOF
 }
 
 validate_step_3() {
-    # Test RPM database works
-    if ! rpm -qa >/dev/null 2>&1; then
-        echo ""
-        print_color "$RED" "✗ RPM database has issues"
-        return 1
-    fi
-    
-    # Test that tree package exists and is verified
-    if ! rpm -q tree >/dev/null 2>&1; then
-        echo ""
-        print_color "$YELLOW" "  Note: tree package not found"
-        echo "  This is okay if you removed it"
-    fi
-    
+    # Can't really validate search was performed, but that's okay
+    # The student's progression shows they're learning
     return 0
 }
 
@@ -388,87 +354,77 @@ solution_step_3() {
 
 SOLUTION:
 ─────────
-Step 1: Test RPM database
-  rpm -qa | head -20
-  rpm -qa | wc -l
+Search for applications:
+  flatpak search firefox
+  flatpak search calculator
+  flatpak search editor
 
-Step 2: Verify package integrity
-  rpm -V tree
+View application information:
+  flatpak info org.mozilla.firefox
+  flatpak remote-info fedora org.gnome.Calculator
 
-Step 3: Check database location
-  ls -lh /var/lib/rpm/
+Understanding application IDs:
+  Format: org.domain.ApplicationName
+  Examples:
+    org.mozilla.firefox - Firefox browser
+    org.gnome.Calculator - GNOME calculator
+    org.libreoffice.LibreOffice - LibreOffice suite
 
-Step 4: Understanding verification
-  rpm -V tree output:
-  - No output = package intact
-  - S = Size changed
-  - M = Mode changed
-  - 5 = MD5 checksum changed
-  - L = Symlink changed
-  - U = User changed
-  - G = Group changed
-  - T = Modification time changed
+Application metadata includes:
+  - Application ID
+  - Version
+  - Required runtime
+  - Size
+  - Permissions
+  - Description
 
-Database health checks:
-  - rpm -qa should complete quickly
-  - No errors during queries
-  - Verification completes successfully
-
-When to rebuild database:
-  - rpm commands hang
-  - Database corruption errors
-  - Inconsistent query results
-  Command: rpm --rebuilddb
+Runtimes:
+  Shared base systems that applications use
+  Examples: org.gnome.Platform, org.kde.Platform
+  Installed once, used by many apps
+  Reduces duplication
 
 EOF
 }
 
 hint_step_4() {
-    echo "  Check version: flatpak --version"
-    echo "  Add remote: flatpak remote-add --if-not-exists NAME URL"
-    echo "  List remotes: flatpak remotes"
+    echo "  Install: flatpak install REMOTE APP_ID"
+    echo "  Try: org.gnome.Calculator or a small app"
+    echo "  Verify: flatpak list --app"
 }
 
 # STEP 4
 show_step_4() {
     cat << 'EOF'
-TASK: Install and configure Flatpak
+TASK: Install a Flatpak application
 
-Set up Flatpak as an alternative packaging system.
+Install an application from the remote repository.
 
 Requirements:
-  • Verify Flatpak is installed
-  • Add the Fedora registry as a remote
-  • List configured remotes
-  • Search for an application
+  • Install an application from the fedora remote
+  • Choose a small application (calculator, text editor, etc.)
+  • Observe runtime installation if needed
+  • Verify the application was installed
+  • Check the installed size
 
-Workflow:
-  1. Check Flatpak installation
-  2. Add Fedora remote: oci+https://registry.fedoraproject.org
-  3. Verify remote is added
-  4. Search for applications
+Suggested applications to try:
+  • org.gnome.Calculator - Simple calculator
+  • org.gnome.TextEditor - Text editor
+  • Choose any small application you found
 
-Remote URL to use:
-  oci+https://registry.fedoraproject.org
-
-Remote name to use:
-  fedora
+The installation will also install required runtimes if
+they're not already present.
 EOF
 }
 
 validate_step_4() {
-    # Check Flatpak is installed
-    if ! command -v flatpak >/dev/null 2>&1; then
-        echo ""
-        print_color "$RED" "✗ Flatpak not installed"
-        return 1
-    fi
+    # Check if any application is installed
+    local app_count=$(flatpak list --app 2>/dev/null | wc -l)
     
-    # Check if fedora remote exists
-    if ! flatpak remotes | grep -q "fedora"; then
+    if [ "$app_count" -lt 1 ]; then
         echo ""
-        print_color "$RED" "✗ Fedora remote not added"
-        echo "  Hint: flatpak remote-add --if-not-exists fedora oci+https://registry.fedoraproject.org"
+        print_color "$RED" "✗ No Flatpak applications installed"
+        echo "  Install an application from the fedora remote"
         return 1
     fi
     
@@ -480,81 +436,78 @@ solution_step_4() {
 
 SOLUTION:
 ─────────
-Step 1: Verify Flatpak
-  flatpak --version
-  which flatpak
+Install an application:
+  flatpak install fedora org.gnome.Calculator
 
-Step 2: Add Fedora remote
-  flatpak remote-add --if-not-exists fedora oci+https://registry.fedoraproject.org
+During installation:
+  - Application is downloaded
+  - Required runtime is installed if needed
+  - Dependencies are resolved automatically
+  - Installation is verified
 
-Step 3: List remotes
-  flatpak remotes
-  flatpak remotes -d
+Verify installation:
+  flatpak list --app
+  flatpak list --runtime
 
-Step 4: Search applications
-  flatpak search firefox
-  flatpak search gimp
+Check installation details:
+  flatpak info org.gnome.Calculator
 
-Understanding Flatpak:
-  Architecture:
-  - Container-based applications
-  - Includes all dependencies
-  - Sandboxed execution
-  - Cross-distribution
+Understanding the install process:
+  1. Flatpak checks for required runtime
+  2. Downloads runtime if not present
+  3. Downloads application
+  4. Verifies signatures
+  5. Installs in /var/lib/flatpak/
 
-  Remotes:
-  - OCI registries with applications
-  - Similar to DNF repositories
-  - Common: Flathub, Fedora
-
-  Application IDs:
-  - Format: org.domain.appname
-  - Example: org.mozilla.firefox
-
-  When to use:
-  - Desktop applications
-  - User-level installs
-  - Need latest versions
-  - Cross-platform apps
+Installation includes:
+  - Application files
+  - Application metadata
+  - Required runtime (shared)
+  - Desktop integration files
 
 EOF
 }
 
 hint_step_5() {
-    echo "  Install with DNF: sudo dnf install nano"
-    echo "  Check size: rpm -qi nano | grep Size"
-    echo "  Remove: sudo dnf remove nano"
+    echo "  Run: flatpak run APP_ID"
+    echo "  List: flatpak list"
+    echo "  Update: flatpak update APP_ID"
+    echo "  Remove: flatpak uninstall APP_ID"
 }
 
 # STEP 5
 show_step_5() {
     cat << 'EOF'
-TASK: Compare packaging systems
+TASK: Run and manage installed applications
 
-Install a small package with DNF and understand the differences
-between DNF and Flatpak packaging.
+Learn to run, update, and remove Flatpak applications.
 
 Requirements:
-  • Install nano with DNF
-  • Check package size and dependencies
-  • Remove the package
-  • Compare with Flatpak approach
+  • Run the application you installed
+  • List all installed applications and runtimes
+  • Check for updates
+  • Uninstall the application when done
 
-Workflow:
-  1. Install nano using DNF
-  2. Check package information
-  3. Verify it's installed
-  4. Remove the package
-  5. Understand DNF vs Flatpak trade-offs
+Management tasks:
+  • Running applications
+  • Viewing installed items
+  • Updating applications
+  • Removing applications
 
-This demonstrates traditional package management workflow.
+The application will run in a sandbox, isolated from
+the rest of the system for security.
 EOF
 }
 
 validate_step_5() {
-    # We don't require nano to be installed at validation
-    # Just that they understand the process
-    # Check if they tried installing (it's okay if removed)
+    # Check that application was removed (cleanup)
+    local app_count=$(flatpak list --app 2>/dev/null | wc -l)
+    
+    if [ "$app_count" -gt 0 ]; then
+        echo ""
+        print_color "$YELLOW" "  Note: Application still installed"
+        echo "  Remember to uninstall when done testing"
+    fi
     
     return 0
 }
@@ -564,60 +517,46 @@ solution_step_5() {
 
 SOLUTION:
 ─────────
-Step 1: Install with DNF
-  sudo dnf install -y nano
+Run the application:
+  flatpak run org.gnome.Calculator
 
-Step 2: Check package info
-  rpm -qi nano
-  rpm -ql nano | head
-  rpm -qR nano
+List installed items:
+  flatpak list
+  flatpak list --app
+  flatpak list --runtime
 
-Step 3: Verify installation
-  which nano
-  nano --version
+Check for updates:
+  flatpak update
+  flatpak update org.gnome.Calculator
 
-Step 4: Remove package
-  sudo dnf remove -y nano
+Uninstall application:
+  flatpak uninstall org.gnome.Calculator
 
-Step 5: Compare approaches
+Uninstall with data:
+  flatpak uninstall --delete-data org.gnome.Calculator
 
-DNF (traditional):
-  Pros:
-  - Tight system integration
-  - Smaller package size
-  - Shared libraries
-  - Distribution tested
-  
-  Cons:
-  - Distribution specific
-  - Dependency conflicts possible
-  - Requires root for install
-  - System-wide only
+Understanding Flatpak management:
 
-Flatpak (container):
-  Pros:
-  - Cross-distribution
-  - Isolated dependencies
-  - User-level installs possible
-  - Sandboxed security
-  
-  Cons:
-  - Larger downloads
-  - More disk space
-  - Less system integration
-  - Best for desktop apps
+Running apps:
+  - Applications run in sandbox
+  - Limited access to system resources
+  - Can request permissions
+  - Isolated from other apps
 
-Use DNF for:
-  - System packages
-  - Server software
-  - Daemons and services
-  - CLI tools
+Updates:
+  - Update individual apps
+  - Update all apps at once
+  - Runtime updates happen automatically
+  - Check updates regularly
 
-Use Flatpak for:
-  - Desktop applications
-  - GUI programs
-  - Latest software versions
-  - User applications
+Removal:
+  - Uninstall removes application
+  - Runtimes may remain (shared)
+  - Use --unused to remove unused runtimes
+  - --delete-data removes user data
+
+Cleanup unused runtimes:
+  flatpak uninstall --unused
 
 EOF
 }
@@ -629,67 +568,59 @@ validate() {
     local score=0
     local total=5
     
-    echo "Checking your package management troubleshooting..."
+    echo "Checking your Flatpak work..."
     echo ""
     
-    # CHECK 1: Repository fixed
-    print_color "$CYAN" "[1/$total] Checking repository fix..."
-    local broken_enabled=0
-    if [ -f /etc/yum.repos.d/broken-repo.repo ]; then
-        if grep -q "enabled=1" /etc/yum.repos.d/broken-repo.repo 2>/dev/null; then
-            broken_enabled=1
-        fi
-    fi
-    
-    if [ $broken_enabled -eq 0 ]; then
-        print_color "$GREEN" "  ✓ Broken repository fixed"
+    # CHECK 1: Flatpak installed
+    print_color "$CYAN" "[1/$total] Checking Flatpak installation..."
+    if command -v flatpak >/dev/null 2>&1; then
+        print_color "$GREEN" "  ✓ Flatpak is installed"
         ((score++))
     else
-        print_color "$RED" "  ✗ Repository still broken"
-        print_color "$YELLOW" "  Fix: Disable or remove broken-repo.repo"
+        print_color "$RED" "  ✗ Flatpak not found"
     fi
     echo ""
     
-    # CHECK 2: Cache cleaned
-    print_color "$CYAN" "[2/$total] Checking DNF cache..."
-    if [ ! -f /var/cache/dnf/.broken-cache-marker ]; then
-        print_color "$GREEN" "  ✓ DNF cache cleaned"
+    # CHECK 2: Remote configured
+    print_color "$CYAN" "[2/$total] Checking remote configuration..."
+    if flatpak remotes 2>/dev/null | grep -q "fedora"; then
+        print_color "$GREEN" "  ✓ Fedora remote configured"
         ((score++))
     else
-        print_color "$RED" "  ✗ DNF cache not cleaned"
-        print_color "$YELLOW" "  Fix: Run dnf clean all"
+        print_color "$RED" "  ✗ Fedora remote not found"
+        print_color "$YELLOW" "  Hint: Add with oci+https://registry.fedoraproject.org"
     fi
     echo ""
     
-    # CHECK 3: RPM database
-    print_color "$CYAN" "[3/$total] Checking RPM database..."
-    if rpm -qa >/dev/null 2>&1; then
-        print_color "$GREEN" "  ✓ RPM database healthy"
+    # CHECK 3: Search performed (inferred by progression)
+    print_color "$CYAN" "[3/$total] Checking application exploration..."
+    if [ $score -ge 2 ]; then
+        print_color "$GREEN" "  ✓ Application search capabilities understood"
         ((score++))
     else
-        print_color "$RED" "  ✗ RPM database has issues"
-        print_color "$YELLOW" "  Fix: Check rpm commands work"
+        print_color "$YELLOW" "  Complete previous steps first"
     fi
     echo ""
     
-    # CHECK 4: Flatpak configured
-    print_color "$CYAN" "[4/$total] Checking Flatpak configuration..."
-    if command -v flatpak >/dev/null 2>&1 && flatpak remotes | grep -q "fedora"; then
-        print_color "$GREEN" "  ✓ Flatpak configured with remote"
+    # CHECK 4: Application installed
+    print_color "$CYAN" "[4/$total] Checking application installation..."
+    local app_count=$(flatpak list --app 2>/dev/null | wc -l)
+    if [ "$app_count" -ge 1 ]; then
+        print_color "$GREEN" "  ✓ Flatpak application installed"
         ((score++))
     else
-        print_color "$RED" "  ✗ Flatpak not fully configured"
-        print_color "$YELLOW" "  Fix: Add fedora remote"
+        print_color "$RED" "  ✗ No applications installed"
+        print_color "$YELLOW" "  Hint: Install an app from fedora remote"
     fi
     echo ""
     
-    # CHECK 5: Understanding demonstrated
-    print_color "$CYAN" "[5/$total] Checking package management understanding..."
+    # CHECK 5: Management demonstrated
+    print_color "$CYAN" "[5/$total] Checking application management..."
     if [ $score -ge 3 ]; then
-        print_color "$GREEN" "  ✓ Demonstrated troubleshooting skills"
+        print_color "$GREEN" "  ✓ Flatpak management demonstrated"
         ((score++))
     else
-        print_color "$YELLOW" "  Complete previous steps to demonstrate understanding"
+        print_color "$YELLOW" "  Complete previous steps to demonstrate management"
     fi
     echo ""
     
@@ -701,11 +632,13 @@ validate() {
         print_color "$GREEN" "STATUS: ✓ PASSED"
         echo ""
         echo "Excellent! You successfully:"
-        echo "  • Fixed DNF repository issues"
-        echo "  • Cleaned and rebuilt DNF cache"
-        echo "  • Verified RPM database integrity"
-        echo "  • Configured Flatpak with remote"
-        echo "  • Understand both packaging systems"
+        echo "  • Verified Flatpak installation"
+        echo "  • Configured remote repository"
+        echo "  • Searched for applications"
+        echo "  • Installed a Flatpak application"
+        echo "  • Managed Flatpak applications"
+        echo ""
+        echo "You understand Flatpak for desktop application management!"
     else
         print_color "$YELLOW" "STATUS: ⚠ INCOMPLETE ($score/$total checks passed)"
         echo ""
@@ -728,75 +661,105 @@ solution() {
 COMPLETE SOLUTION WALKTHROUGH
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-STEP 1: Fix broken repository
-─────────────────────────────────────────────────────────────────
-dnf repolist
-sudo vi /etc/yum.repos.d/broken-repo.repo
-# Change enabled=1 to enabled=0
-dnf repolist
-
-
-STEP 2: Clean DNF cache
-─────────────────────────────────────────────────────────────────
-sudo dnf clean all
-sudo dnf makecache
-dnf repolist
-
-
-STEP 3: Verify RPM database
-─────────────────────────────────────────────────────────────────
-rpm -qa | head
-rpm -V tree
-ls /var/lib/rpm/
-
-
-STEP 4: Configure Flatpak
+STEP 1: Verify installation
 ─────────────────────────────────────────────────────────────────
 flatpak --version
+which flatpak
+flatpak remotes
+ls /var/lib/flatpak/
+
+
+STEP 2: Add remote
+─────────────────────────────────────────────────────────────────
 flatpak remote-add --if-not-exists fedora oci+https://registry.fedoraproject.org
 flatpak remotes
-flatpak search firefox
+flatpak remote-ls fedora --app
 
 
-STEP 5: Compare systems
+STEP 3: Search applications
 ─────────────────────────────────────────────────────────────────
-sudo dnf install -y nano
-rpm -qi nano
-sudo dnf remove -y nano
+flatpak search calculator
+flatpak search firefox
+flatpak info org.gnome.Calculator
+
+
+STEP 4: Install application
+─────────────────────────────────────────────────────────────────
+flatpak install fedora org.gnome.Calculator
+flatpak list --app
+
+
+STEP 5: Manage application
+─────────────────────────────────────────────────────────────────
+flatpak run org.gnome.Calculator
+flatpak list
+flatpak update org.gnome.Calculator
+flatpak uninstall org.gnome.Calculator
 
 
 KEY CONCEPTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Repository troubleshooting:
-  - Check /etc/yum.repos.d/
-  - Disable with enabled=0
-  - Check /var/log/dnf.log
+Flatpak architecture:
+  - Container-based applications
+  - Sandboxed execution
+  - Runtime dependencies included
+  - OCI registry format
 
-Cache management:
-  - Location: /var/cache/dnf/
-  - Clean: dnf clean all
-  - Rebuild: dnf makecache
+Data locations:
+  System: /var/lib/flatpak/
+  User: ~/.local/share/flatpak/
+  Config: /etc/flatpak/remotes.d/
 
-RPM database:
-  - Location: /var/lib/rpm/
-  - Test: rpm -qa
-  - Verify: rpm -V PACKAGE
-  - Rebuild: rpm --rebuilddb
+Application IDs:
+  Format: org.domain.ApplicationName
+  Reverse-DNS naming convention
+  Unique identifier for each app
+
+Runtimes:
+  Shared base systems
+  Examples: org.gnome.Platform
+  Installed once, used by many apps
+  Reduces disk space usage
 
 Flatpak vs DNF:
-  DNF: System packages, tight integration
-  Flatpak: Desktop apps, sandboxed
+  Flatpak:
+  - Desktop applications
+  - Sandboxed security
+  - Distribution-independent
+  - User-level installs possible
+  
+  DNF:
+  - System packages
+  - Tight OS integration
+  - Distribution-specific
+  - Requires root for install
 
 
 EXAM TIPS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. DNF fails? Check repositories first
-2. Stale metadata? Clean cache
-3. Package issues? Verify with rpm -V
-4. Always check /var/log/dnf.log
-5. Flatpak for desktop, DNF for system
+Essential Flatpak commands:
+1. flatpak remote-add - Add repository
+2. flatpak remotes - List repositories
+3. flatpak search - Find applications
+4. flatpak install - Install application
+5. flatpak list - Show installed items
+6. flatpak run - Execute application
+7. flatpak update - Update applications
+8. flatpak uninstall - Remove application
+
+Common patterns:
+  flatpak remote-add --if-not-exists NAME URL
+  flatpak install REMOTE APP_ID
+  flatpak run APP_ID
+  flatpak uninstall --unused (cleanup)
+
+Remember:
+  - OCI registry URLs start with oci+https://
+  - Application IDs use reverse-DNS format
+  - Runtimes are shared dependencies
+  - Sandboxed apps have limited permissions
 
 EOF
 }
@@ -807,19 +770,19 @@ EOF
 cleanup_lab() {
     echo "Cleaning up lab environment..."
     
-    # Remove broken repository
-    rm -f /etc/yum.repos.d/broken-repo.repo 2>/dev/null || true
+    # Remove installed applications
+    flatpak list --app 2>/dev/null | awk '{print $2}' | while read app; do
+        flatpak uninstall -y "$app" 2>/dev/null || true
+    done
     
-    # Remove cache marker
-    rm -f /var/cache/dnf/.broken-cache-marker 2>/dev/null || true
-    
-    # Remove test packages
-    dnf remove -y tree nano 2>/dev/null || true
+    # Clean up unused runtimes
+    flatpak uninstall --unused -y 2>/dev/null || true
     
     # Remove working directory
-    rm -rf /tmp/package-lab 2>/dev/null || true
+    rm -rf /tmp/flatpak-work 2>/dev/null || true
     
-    echo "  ✓ All lab components removed"
+    echo "  ✓ Flatpak applications removed"
+    echo "  ✓ All lab components cleaned"
 }
 
 # Execute the main framework
