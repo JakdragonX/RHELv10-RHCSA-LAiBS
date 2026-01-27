@@ -1,5 +1,5 @@
 #!/bin/bash
-# labs/m04/13B-process-monitoring.sh
+# labs/m03/13B-process-monitoring.sh
 # Lab: Process monitoring with ps
 # Difficulty: Intermediate
 # RHCSA Objective: 13.3, 13.4 - Process states and monitoring with ps
@@ -469,10 +469,12 @@ EOF
 }
 
 hint_step_4() {
-    echo "  By CPU: ps aux --sort=-%cpu | head"
-    echo "  By memory: ps aux --sort=-%mem | head"
-    echo "  Top 10 CPU: ps aux --sort=-%cpu | head -11"
-    echo "  Specific user total: ps -u USER -o %cpu | awk '{sum+=$1} END {print sum}'"
+    cat << 'EOF'
+  By CPU: ps aux --sort=-%cpu | head
+  By memory: ps aux --sort=-%mem | head
+  Top 10 CPU: ps aux --sort=-%cpu | head -11
+  Specific user total: ps -u USER -o %cpu | awk '{sum+=$1} END {print sum}'
+EOF
 }
 
 # STEP 4
