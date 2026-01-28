@@ -1,5 +1,5 @@
 #!/bin/bash
-# labs/m03/13B-process-monitoring.sh
+# labs/m04/13B-process-monitoring.sh
 # Lab: Process monitoring with ps
 # Difficulty: Intermediate
 # RHCSA Objective: 13.3, 13.4 - Process states and monitoring with ps
