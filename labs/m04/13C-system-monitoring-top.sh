@@ -398,43 +398,62 @@ EOF
 
 hint_step_3() {
     cat << 'EOF'
-  Processes will already be running
-  Use top, press P (sort by CPU)
-  Or: ps aux --sort=-%cpu | head
-  Find all PIDs using >50% CPU
-  Kill them: kill PID1 PID2 PID3
-  Or: pkill -f stress-ng
+  Start 3 processes:
+    stress-ng --cpu 1 --timeout 300 &
+    stress-ng --cpu 1 --timeout 300 &
+    stress-ng --cpu 1 --timeout 300 &
+  
+  Wait: sleep 5
+  
+  Find them: top (press P) or ps aux --sort=-%cpu | head
+  
+  Get PIDs: pgrep -f stress-ng
+  
+  Kill all: pkill -f stress-ng
+  
+  Record: echo "CPU_HOG_PIDS: $(pgrep -f stress-ng | tr '\n' ',')" >> findings.txt
 EOF
 }
 
 # STEP 3
 show_step_3() {
+    # Auto-start CPU stress processes when this step begins
+    if ! pgrep -u $(whoami) -f "stress-ng --cpu" >/dev/null 2>&1; then
+        echo ""
+        print_color "$YELLOW" "Starting CPU stress processes..."
+        stress-ng --cpu 1 --timeout 300 >/dev/null 2>&1 &
+        stress-ng --cpu 1 --timeout 300 >/dev/null 2>&1 &
+        stress-ng --cpu 1 --timeout 300 >/dev/null 2>&1 &
+        sleep 3
+        print_color "$GREEN" "✓ 3 CPU-intensive processes started"
+        echo ""
+    fi
+    
     cat << 'EOF'
 TASK: Eliminate CPU overload
 
-CPU-intensive processes are already running. Find and kill them ALL.
-
-SETUP HAPPENING NOW:
-  Starting 3 CPU-intensive processes...
-  (This happens automatically when you start this step)
+CPU-intensive processes are now running. Find and kill them ALL.
 
 Requirements:
   • Use top or ps to find processes with >50% CPU
+  
   • List ALL PIDs consuming excessive CPU
-  • Record the PIDs in findings.txt
+  
+  • Record the PIDs in findings.txt:
+    CPU_HOG_PIDS: PID1,PID2,PID3
+  
   • Kill ALL of them
+  
   • Verify CPU usage drops significantly
-
-Record in findings.txt:
-  CPU_HOG_PIDS: PID1,PID2,PID3
 
 In top:
   - Press P to sort by CPU
   - Look at %CPU column
-  - Anything >50% is a problem
+  - stress-ng processes should show high CPU
+  - Note ALL their PIDs
   - Press q to quit
 
-You must kill ALL CPU hogs for this step to pass.
+You must kill ALL 3 CPU hogs for this step to pass.
 EOF
 }
 
@@ -464,22 +483,27 @@ solution_step_3() {
 
 SOLUTION:
 ─────────
+Start 3 CPU stress processes:
+  stress-ng --cpu 1 --timeout 300 &
+  stress-ng --cpu 1 --timeout 300 &
+  stress-ng --cpu 1 --timeout 300 &
+
+Wait for them to ramp up:
+  sleep 5
+
 Find CPU hogs with top:
   top
   Press P (sort by CPU)
-  Look for processes >50% CPU
-  Note all PIDs
+  Look for stress-ng processes with high %CPU
+  Note all 3 PIDs
   Press q to quit
 
 Or use ps:
   ps aux --sort=-%cpu | head -10
+  # stress-ng processes should be at top
 
-Find specific processes:
+Find all stress-ng PIDs:
   pgrep -f stress-ng
-  pgrep -f cpu-burner
-
-List all CPU hogs:
-  ps aux | awk '$3 > 50 {print $2}'
 
 Record PIDs:
   PIDS=$(pgrep -f stress-ng | tr '\n' ',' | sed 's/,$//')
@@ -502,8 +526,9 @@ Check CPU usage normalized:
   # us (user) should be low
 
 Understanding:
-  %CPU >100% means multi-threaded
-  Multiple CPU hogs add up
+  %CPU can exceed 100% on multi-core
+  Each stress-ng uses ~100% of one core
+  3 processes = ~300% total on 4-core system
   Kill them to free CPU cycles
   Load average will drop after killing
 
@@ -876,6 +901,11 @@ echo "MEMORY_HOG_PID: $(pgrep -f memory-hog)" >> /tmp/monitoring-lab/findings.tx
 
 STEP 3: Kill CPU hogs
 ─────────────────────────────────────────────────────────────────
+stress-ng --cpu 1 --timeout 300 &
+stress-ng --cpu 1 --timeout 300 &
+stress-ng --cpu 1 --timeout 300 &
+sleep 5
+
 top  # Press P to see CPU usage
 pgrep -f stress-ng
 pkill -f stress-ng
