@@ -11,7 +11,7 @@ source "${SCRIPT_DIR}/../../lab-runner.sh"
 # Lab metadata
 LAB_NAME="Managing process priority with nice and renice"
 LAB_DIFFICULTY="Intermediate"
-LAB_TIME_ESTIMATE="30-40 minutes"
+LAB_TIME_ESTIMATE="25-35 minutes"
 
 #############################################################################
 # SETUP
@@ -21,14 +21,8 @@ setup_lab() {
     
     # Clean up any previous test processes
     pkill -u $(whoami) -f "cpu-burner" 2>/dev/null || true
-    pkill -u $(whoami) -f "stress-ng" 2>/dev/null || true
+    sudo pkill -f "cpu-burner" 2>/dev/null || true
     rm -rf /tmp/priority-lab 2>/dev/null || true
-    
-    # Install stress-ng if needed
-    if ! command -v stress-ng >/dev/null 2>&1; then
-        echo "  Installing stress-ng..."
-        dnf install -y stress-ng >/dev/null 2>&1
-    fi
     
     # Create working directory
     mkdir -p /tmp/priority-lab
@@ -87,50 +81,37 @@ Regular users can only increase niceness (lower priority).
 Root can set any nice value.
 
 OBJECTIVES:
-  1. Start a process with low priority using nice
-     • Start a CPU burner with nice value 10
-     • Verify it's running with that nice value
-     • Check it in ps and top
-     • Kill it when verified
+  1. Start processes with nice values
+     • Start CPU burner with nice value 10
+     • Verify nice value in ps
+     • Try starting with negative nice (needs sudo)
+     • Understand nice ranges and permissions
 
-  2. Start a high-priority process (requires root)
-     • Start CPU burner with nice value -10
-     • Verify the negative nice value
-     • Observe it gets more CPU time
-     • Kill it when verified
+  2. Change priority with renice
+     • Start normal CPU burner (nice 0)
+     • Increase nice to 15 with renice
+     • Try to decrease nice (will fail as user)
+     • Use sudo to set negative nice
+     • Understand renice permissions
 
-  3. Change priority of running process with renice
-     • Start a normal CPU burner
-     • Note its nice value (0)
-     • Use renice to set it to 15
-     • Verify the change took effect
-     • Kill it
-
-  4. Compare CPU allocation between priorities
-     • Start 2 processes: nice 0 and nice 19
-     • Watch them in top (press P for CPU sort)
-     • Observe CPU % difference
-     • Nice 0 gets more CPU than nice 19
-     • Kill both
-
-  5. Try to decrease nice as regular user (will fail)
-     • Start process with nice 10
-     • Try to renice it to 5 (should fail)
-     • Observe permission denied
-     • Understanding: Users can only increase nice
-     • Kill the process
+  3. Compare CPU allocation in top
+     • Start 2 processes: nice 0 vs nice 19
+     • Watch them compete in top (Shift+P)
+     • Observe CPU % differences
+     • Kill both processes
 
 HINTS:
   • nice -n VALUE command
   • ps -o pid,ni,cmd shows nice value
   • renice -n VALUE -p PID
-  • top shows NI column
+  • top: Shift+P sorts by CPU
   • Only root can set negative nice
+  • Users can only increase nice
 
 SUCCESS CRITERIA:
-  • Can start processes with specific nice values
+  • Can start processes with nice values
   • Can change priority with renice
-  • Understand nice value effects on CPU
+  • Understand CPU allocation differences
   • Know permission restrictions
   • All test processes cleaned up
 EOF
@@ -141,11 +122,9 @@ EOF
 #############################################################################
 objectives_quick() {
     cat << 'EOF'
-  ☐ 1. Start low-priority process with nice
-  ☐ 2. Start high-priority process (root)
-  ☐ 3. Change priority with renice
-  ☐ 4. Compare CPU allocation by priority
-  ☐ 5. Understand user permissions for nice
+  ☐ 1. Start processes with nice
+  ☐ 2. Change priority with renice
+  ☐ 3. Compare CPU allocation in top
 EOF
 }
 
@@ -154,7 +133,7 @@ EOF
 #############################################################################
 
 get_step_count() {
-    echo "5"
+    echo "3"
 }
 
 scenario_context() {
@@ -170,40 +149,55 @@ EOF
 # STEP 1
 show_step_1() {
     cat << 'EOF'
-TASK: Start a low-priority process
+TASK: Start processes with different nice values
 
-Launch a CPU-intensive process with reduced priority so it doesn't
-impact other work.
+Learn how to launch processes with specific priority levels.
 
 Requirements:
-  • Start the CPU burner with nice value 10:
+  • Start with low priority (nice 10):
     nice -n 10 /tmp/priority-lab/cpu-burner.sh &
   
-  • Verify its nice value:
-    ps -o pid,ni,cmd -p PID
-    
-  • Watch it in top:
-    top -p PID
-    (Look at NI column, should show 10)
+  • Check nice value:
+    ps -o pid,ni,cmd -p $(pgrep -f cpu-burner)
+    (Should show NI=10)
   
-  • Kill it when done:
-    kill PID
+  • Kill it:
+    kill $(pgrep -f cpu-burner)
+  
+  • Start with high priority (needs sudo):
+    sudo nice -n -10 /tmp/priority-lab/cpu-burner.sh &
+  
+  • Check nice value:
+    ps -o pid,ni,cmd -p $(pgrep -f cpu-burner)
+    (Should show NI=-10)
+  
+  • Kill it:
+    sudo kill $(pgrep -f cpu-burner)
 
-Nice value 10 = lower priority = less CPU time.
+Nice ranges: -20 (highest) to 19 (lowest)
+Regular users: 0 to 19 only
+Root: can set any value
 EOF
 }
 
 validate_step_1() {
-    # Exploratory, always pass
+    # Check cleanup
+    if pgrep -f "cpu-burner" >/dev/null 2>&1; then
+        echo ""
+        print_color "$YELLOW" "  Note: cpu-burner still running"
+        echo "  Clean up: pkill -f cpu-burner or sudo pkill -f cpu-burner"
+    fi
+    
     return 0
 }
 
 hint_step_1() {
     cat << 'EOF'
-  Start: nice -n 10 /tmp/priority-lab/cpu-burner.sh &
-  Get PID: pgrep -f cpu-burner
-  Check nice: ps -o pid,ni,cmd -p $(pgrep -f cpu-burner)
+  Low priority: nice -n 10 /tmp/priority-lab/cpu-burner.sh &
+  Check: ps -o pid,ni,cmd -p $(pgrep -f cpu-burner)
   Kill: kill $(pgrep -f cpu-burner)
+  High priority: sudo nice -n -10 /tmp/priority-lab/cpu-burner.sh &
+  Kill: sudo kill $(pgrep -f cpu-burner)
 EOF
 }
 
@@ -215,21 +209,22 @@ SOLUTION:
 Start with low priority:
   nice -n 10 /tmp/priority-lab/cpu-burner.sh &
 
-Get the PID:
-  PID=$(pgrep -f cpu-burner)
-  echo "PID: $PID"
-
 Check nice value:
-  ps -o pid,ni,cmd -p $PID
+  ps -o pid,ni,cmd -p $(pgrep -f cpu-burner)
   # NI column shows: 10
 
-Alternative check:
-  ps -o pid,ni,cmd -p $PID
-  top -p $PID
-  # Press q to quit top
-
 Kill it:
-  kill $PID
+  kill $(pgrep -f cpu-burner)
+
+Start with high priority (needs root):
+  sudo nice -n -10 /tmp/priority-lab/cpu-burner.sh &
+
+Check nice value:
+  ps -o pid,ni,cmd -p $(pgrep -f cpu-burner)
+  # NI column shows: -10
+
+Kill it (needs sudo since started by root):
+  sudo kill $(pgrep -f cpu-burner)
 
 Understanding nice:
   Syntax: nice -n VALUE command
@@ -239,21 +234,29 @@ Understanding nice:
     0 = default/normal priority
    19 = lowest priority (least CPU)
   
-  Higher nice = "nicer" to other processes
-  Process yields CPU more willingly
+  Permission rules:
+  Regular users: Can only set 0 to 19
+  Root: Can set -20 to 19
   
-  Who can set what:
-  Regular users: 0 to 19 only
-  Root: -20 to 19
+  Higher nice = "nicer" to other processes
+  
+  Typical values:
+  -10: Important system daemons
+    0: Normal user processes
+   10: Background batch jobs
+   19: Lowest priority tasks
 
 EOF
 }
 
 hint_step_2() {
     cat << 'EOF'
-  Start: sudo nice -n -10 /tmp/priority-lab/cpu-burner.sh &
+  Start: /tmp/priority-lab/cpu-burner.sh &
   Get PID: pgrep -f cpu-burner
-  Check: ps -o pid,ni,cmd -p PID
+  Check: ps -o pid,ni,cmd -p PID (shows 0)
+  Increase: renice -n 15 -p PID (works)
+  Decrease: renice -n 5 -p PID (fails)
+  Sudo: sudo renice -n -5 -p PID (works)
   Kill: sudo kill PID
 EOF
 }
@@ -261,30 +264,43 @@ EOF
 # STEP 2
 show_step_2() {
     cat << 'EOF'
-TASK: Start a high-priority process (requires root)
+TASK: Change priority with renice and test permissions
 
-Give a process higher priority to ensure it gets more CPU time.
+Adjust running process priority and understand permission limits.
 
 Requirements:
-  • Start with negative nice (needs sudo):
-    sudo nice -n -10 /tmp/priority-lab/cpu-burner.sh &
+  • Start CPU burner normally:
+    /tmp/priority-lab/cpu-burner.sh &
   
-  • Get PID:
-    pgrep -f cpu-burner
+  • Get PID and check nice (should be 0):
+    ps -o pid,ni,cmd -p $(pgrep -f cpu-burner)
   
-  • Verify nice value is -10:
-    ps -o pid,ni,cmd -p PID
+  • Increase nice to 15 (works):
+    renice -n 15 -p $(pgrep -f cpu-burner)
   
-  • Kill it with sudo:
-    sudo kill PID
+  • Verify change:
+    ps -o pid,ni,cmd -p $(pgrep -f cpu-burner)
+  
+  • Try to decrease to 5 (will fail):
+    renice -n 5 -p $(pgrep -f cpu-burner)
+    Observe: Permission denied
+  
+  • Use sudo to set negative nice:
+    sudo renice -n -5 -p $(pgrep -f cpu-burner)
+  
+  • Verify:
+    ps -o pid,ni,cmd -p $(pgrep -f cpu-burner)
+  
+  • Kill it:
+    sudo kill $(pgrep -f cpu-burner)
 
-Negative nice values require root privileges.
-Nice -10 gets more CPU than nice 0.
+Users can only increase nice (lower priority).
+Root can set any value.
 EOF
 }
 
 validate_step_2() {
-    # Check no cpu-burner running
+    # Check cleanup
     if pgrep -f "cpu-burner" >/dev/null 2>&1; then
         echo ""
         print_color "$YELLOW" "  Note: cpu-burner still running"
@@ -299,106 +315,6 @@ solution_step_2() {
 
 SOLUTION:
 ─────────
-Start with high priority (needs root):
-  sudo nice -n -10 /tmp/priority-lab/cpu-burner.sh &
-
-Get PID:
-  PID=$(pgrep -f cpu-burner)
-
-Check nice value:
-  ps -o pid,ni,cmd -p $PID
-  # NI shows: -10
-
-View details:
-  ps -eo pid,ni,%cpu,cmd | grep cpu-burner
-
-Kill it (needs sudo since started by root):
-  sudo kill $PID
-
-Understanding negative nice:
-  Requires root/sudo
-  Gets more CPU time
-  Preempts lower priority processes
-  
-  Use cases:
-  - Critical system processes
-  - Time-sensitive jobs
-  - Emergency tasks
-  
-  Typical values:
-  -20: Kernel threads
-  -10: Important daemons
-    0: Normal processes
-   10: Background batch jobs
-   19: Lowest priority tasks
-
-Permission model:
-  Regular user trying negative nice:
-    nice -n -5 command
-    # Error: Permission denied
-  
-  With sudo:
-    sudo nice -n -5 command
-    # Works
-
-EOF
-}
-
-hint_step_3() {
-    cat << 'EOF'
-  Start: /tmp/priority-lab/cpu-burner.sh &
-  Get PID: pgrep -f cpu-burner
-  Check nice: ps -o pid,ni,cmd -p PID (shows 0)
-  Change: renice -n 15 -p PID
-  Verify: ps -o pid,ni,cmd -p PID (shows 15)
-  Kill: kill PID
-EOF
-}
-
-# STEP 3
-show_step_3() {
-    cat << 'EOF'
-TASK: Change priority of running process with renice
-
-Adjust the priority of an already-running process.
-
-Requirements:
-  • Start CPU burner normally:
-    /tmp/priority-lab/cpu-burner.sh &
-  
-  • Check current nice (should be 0):
-    ps -o pid,ni,cmd -p PID
-  
-  • Change to nice 15:
-    renice -n 15 -p PID
-  
-  • Verify change:
-    ps -o pid,ni,cmd -p PID
-  
-  • Kill it:
-    kill PID
-
-renice changes priority of running processes.
-Useful for batch jobs that are running too aggressively.
-EOF
-}
-
-validate_step_3() {
-    # Check cleanup
-    if pgrep -f "cpu-burner" >/dev/null 2>&1; then
-        echo ""
-        print_color "$YELLOW" "  Note: cpu-burner still running"
-        echo "  Clean up: pkill -f cpu-burner"
-    fi
-    
-    return 0
-}
-
-solution_step_3() {
-    cat << 'EOF'
-
-SOLUTION:
-─────────
 Start process normally:
   /tmp/priority-lab/cpu-burner.sh &
 
@@ -409,65 +325,75 @@ Check initial nice:
   ps -o pid,ni,cmd -p $PID
   # NI shows: 0 (default)
 
-Change priority:
+Increase nice to 15:
   renice -n 15 -p $PID
+  # Works for regular users
 
-Verify change:
+Verify:
   ps -o pid,ni,cmd -p $PID
-  # NI now shows: 15
+  # NI shows: 15
 
-Alternative verification:
-  top -p $PID
-  # NI column shows 15
+Try to decrease to 5:
+  renice -n 5 -p $PID
+  # Error: Permission denied
+
+Use sudo to set negative:
+  sudo renice -n -5 -p $PID
+
+Verify:
+  ps -o pid,ni,cmd -p $PID
+  # NI shows: -5
 
 Kill it:
-  kill $PID
+  sudo kill $PID
 
 Understanding renice:
-  Changes nice of running process
   Syntax: renice -n VALUE -p PID
   
-  Can target:
-  -p PID: Specific process
+  Can also target:
+  -u USER: All user processes
   -g GID: Process group
-  -u USER: All user's processes
   
-  Examples:
-    renice -n 10 -p 1234
-    renice -n 5 -u bob
-    renice -n 19 -g 5000
-
-Real-world example:
-  # Background job running too hot
-  ps aux | grep backup
-  # PID 5432 using 98% CPU
+  Permission rules:
+  Regular users:
+  ✓ Can increase nice (0→10, 10→15)
+  ✗ Cannot decrease nice (10→5, 5→0)
+  ✗ Cannot set negative values
   
-  renice -n 15 -p 5432
-  # Now using less CPU, system responsive
+  Root:
+  ✓ Can set any value
+  ✓ Can increase or decrease
 
-Permission rules (same as nice):
-  Regular user: Can only increase nice
-  Root: Can set any value
+Why restriction exists:
+  Prevents users from hogging CPU
+  Users can be "nice" but not greedy
+
+Real-world use:
+  Background job using too much CPU:
+    ps aux | grep backup
+    renice -n 15 -p 5432
+  Now system is responsive again
 
 EOF
 }
 
-hint_step_4() {
+hint_step_3() {
     cat << 'EOF'
   Start normal: /tmp/priority-lab/cpu-burner.sh &
   Start low: nice -n 19 /tmp/priority-lab/cpu-burner.sh &
-  Watch: top (press P for CPU sort)
-  Compare: Normal process gets more %CPU than nice 19
-  Kill both: pkill -f cpu-burner
+  Watch: top
+  Sort: Press Shift+P (capital P for CPU sort)
+  Observe: Nice 0 gets more %CPU than nice 19
+  Kill: pkill -f cpu-burner
 EOF
 }
 
-# STEP 4
-show_step_4() {
+# STEP 3
+show_step_3() {
     cat << 'EOF'
-TASK: Compare CPU allocation between different priorities
+TASK: Compare CPU allocation between priorities in top
 
-See how nice values actually affect CPU time allocation.
+See how nice values actually affect CPU time distribution.
 
 Requirements:
   • Start first process normally:
@@ -476,23 +402,28 @@ Requirements:
   • Start second with lowest priority:
     nice -n 19 /tmp/priority-lab/cpu-burner.sh &
   
-  • Watch them compete in top:
+  • Open top:
     top
-    Press P to sort by CPU
   
-  • Observe:
-    - Normal (nice 0) gets more %CPU
-    - Nice 19 gets less %CPU
-    - They're competing for CPU time
+  • Sort by CPU usage:
+    Press Shift+P (capital P)
+  
+  • Observe differences:
+    - Look at %CPU column
+    - Nice 0 gets more CPU
+    - Nice 19 gets less CPU
+    - Look at NI column to confirm values
+  
+  • Press q to quit top
   
   • Kill both:
     pkill -f cpu-burner
 
-This demonstrates CPU scheduling based on priority.
+This demonstrates CPU scheduler favoring lower nice values.
 EOF
 }
 
-validate_step_4() {
+validate_step_3() {
     # Check all cpu-burners killed
     if pgrep -f "cpu-burner" >/dev/null 2>&1; then
         echo ""
@@ -504,7 +435,7 @@ validate_step_4() {
     return 0
 }
 
-solution_step_4() {
+solution_step_3() {
     cat << 'EOF'
 
 SOLUTION:
@@ -515,176 +446,50 @@ Start normal priority:
 Start low priority:
   nice -n 19 /tmp/priority-lab/cpu-burner.sh &
 
-Watch in top:
+Open top:
   top
-  # Press P to sort by CPU
-  # Press q to quit
 
-List both:
-  ps -o pid,ni,%cpu,cmd -p $(pgrep -f cpu-burner)
+Sort by CPU:
+  Press Shift+P
+  (That's capital P - sorts by CPU usage)
 
-Observe CPU allocation:
-  Nice 0 might show: 65% CPU
-  Nice 19 might show: 35% CPU
+Observe:
+  %CPU column shows usage
+  NI column shows nice value
+  
+  Typical results:
+  Nice 0: 65% CPU
+  Nice 19: 35% CPU
   
   (Exact values vary, but nice 0 gets more)
+
+Press q to quit top
+
+Alternative view:
+  ps -o pid,ni,%cpu,cmd -p $(pgrep -f cpu-burner)
 
 Kill both:
   pkill -f cpu-burner
 
 Understanding CPU scheduling:
-  Scheduler gives more time slices to lower nice
-  Higher nice = more likely to be preempted
+  Scheduler gives more time to lower nice
+  Higher nice = more likely preempted
   
-  With 2 competing processes:
-  Nice -10 vs Nice 10: -10 gets ~90% CPU
-  Nice 0 vs Nice 19: 0 gets ~65% CPU
-  Nice 0 vs Nice 0: Each gets ~50% CPU
-  
-  Multiple processes:
+  Examples:
+  Nice -10 vs Nice 10: -10 gets ~90%
+  Nice 0 vs Nice 19: 0 gets ~65%
+  Nice 0 vs Nice 0: Each gets ~50%
+
+Real-world scenario:
+  Web server (nice 0) vs Backup (nice 15)
+  - Users get responsive web pages
+  - Backup runs slower but doesn't impact users
+  - Both processes make progress
+
+Multiple processes:
   Nice values are relative
   Scheduler balances based on priorities
-  
-  Real-world scenarios:
-  Web server (nice 0) vs Backup (nice 15)
-  - Users get responsive web
-  - Backup runs slower but doesn't impact users
-  
-  Multiple batch jobs:
-  Job A (nice 5) vs Job B (nice 10)
-  - Job A finishes faster
-  - Both run, but A prioritized
-
-Monitoring:
-  top - Interactive view
-  ps -eo pid,ni,%cpu,cmd --sort=-%cpu
-  htop - Better visualization (if installed)
-
-EOF
-}
-
-hint_step_5() {
-    cat << 'EOF'
-  Start: nice -n 10 /tmp/priority-lab/cpu-burner.sh &
-  Get PID: pgrep -f cpu-burner
-  Try decrease: renice -n 5 -p PID (will fail)
-  Try increase: renice -n 15 -p PID (works)
-  Kill: kill PID
-EOF
-}
-
-# STEP 5
-show_step_5() {
-    cat << 'EOF'
-TASK: Understand user permission limits
-
-Learn what regular users can and cannot do with nice/renice.
-
-Requirements:
-  • Start with nice 10:
-    nice -n 10 /tmp/priority-lab/cpu-burner.sh &
-  
-  • Get PID:
-    pgrep -f cpu-burner
-  
-  • Try to DECREASE nice to 5 (will fail):
-    renice -n 5 -p PID
-    Observe: Permission denied
-  
-  • Try to INCREASE nice to 15 (will work):
-    renice -n 15 -p PID
-    Observe: Success
-  
-  • Kill it:
-    kill PID
-
-Regular users can only increase nice (lower priority).
-Decreasing nice (higher priority) requires root.
-EOF
-}
-
-validate_step_5() {
-    # Check cleanup
-    if pgrep -f "cpu-burner" >/dev/null 2>&1; then
-        echo ""
-        print_color "$YELLOW" "  Note: cpu-burner still running"
-        echo "  Clean up: pkill -f cpu-burner"
-    fi
-    
-    return 0
-}
-
-solution_step_5() {
-    cat << 'EOF'
-
-SOLUTION:
-─────────
-Start with nice 10:
-  nice -n 10 /tmp/priority-lab/cpu-burner.sh &
-
-Get PID:
-  PID=$(pgrep -f cpu-burner)
-
-Check current nice:
-  ps -o pid,ni,cmd -p $PID
-  # Shows: 10
-
-Try to decrease (will fail):
-  renice -n 5 -p $PID
-  # Error: Permission denied
-  # Cannot decrease nice value
-
-Try to increase (will work):
-  renice -n 15 -p $PID
-  # Success!
-
-Verify:
-  ps -o pid,ni,cmd -p $PID
-  # Shows: 15
-
-Kill it:
-  kill $PID
-
-Understanding permissions:
-  Regular users:
-  ✓ Can increase nice (0 → 10, 10 → 15)
-  ✗ Cannot decrease nice (10 → 5, 5 → 0)
-  ✗ Cannot set negative nice
-  
-  Root/sudo:
-  ✓ Can set any nice value
-  ✓ Can increase or decrease
-  ✓ Can set negative values
-
-Why this restriction:
-  Prevents users from hogging CPU
-  Users can be "nice" but not greedy
-  Root manages system resources
-
-How to decrease as user:
-  Cannot! Must use sudo:
-    sudo renice -n 5 -p $PID
-  
-  Or kill and restart with sudo:
-    kill $PID
-    sudo nice -n 5 command
-
-Security implications:
-  User starts CPU-intensive job
-  System gets slow
-  Admin can renice it: sudo renice -n 19 -p PID
-  User cannot renice back to 0
-
-Practical workflow:
-  Start batch job:
-    nice -n 10 long-job.sh &
-  
-  If system busy:
-    renice -n 19 -p PID
-  
-  If system idle:
-    Cannot decrease without sudo
-    Restart if needed
+  All processes run, but at different speeds
 
 EOF
 }
@@ -701,7 +506,7 @@ validate() {
     
     # CHECK 1: No test processes running
     print_color "$CYAN" "[1/$total] Checking cleanup..."
-    local test_count=$(pgrep -u $(whoami) -c "cpu-burner|stress-ng" 2>/dev/null || echo "0")
+    local test_count=$(pgrep -u $(whoami) -c "cpu-burner" 2>/dev/null || echo "0")
     
     if [ "$test_count" -eq 0 ]; then
         print_color "$GREEN" "  ✓ All test processes cleaned up"
@@ -741,7 +546,6 @@ validate() {
         echo "  • Changing priority with renice"
         echo "  • How nice affects CPU allocation"
         echo "  • Permission restrictions for users"
-        echo "  • When to use different priorities"
     else
         print_color "$YELLOW" "STATUS: ⚠ INCOMPLETE ($score/$total checks passed)"
     fi
@@ -761,44 +565,39 @@ solution() {
 COMPLETE SOLUTION WALKTHROUGH
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-STEP 1: Low priority
+STEP 1: Start with nice
 ─────────────────────────────────────────────────────────────────
 nice -n 10 /tmp/priority-lab/cpu-burner.sh &
 ps -o pid,ni,cmd -p $(pgrep -f cpu-burner)
 kill $(pgrep -f cpu-burner)
 
-
-STEP 2: High priority
-─────────────────────────────────────────────────────────────────
 sudo nice -n -10 /tmp/priority-lab/cpu-burner.sh &
 ps -o pid,ni,cmd -p $(pgrep -f cpu-burner)
 sudo kill $(pgrep -f cpu-burner)
 
 
-STEP 3: Renice running process
+STEP 2: Change with renice
 ─────────────────────────────────────────────────────────────────
 /tmp/priority-lab/cpu-burner.sh &
 PID=$(pgrep -f cpu-burner)
 renice -n 15 -p $PID
 ps -o pid,ni,cmd -p $PID
-kill $PID
+
+renice -n 5 -p $PID  # Fails
+sudo renice -n -5 -p $PID  # Works
+ps -o pid,ni,cmd -p $PID
+sudo kill $PID
 
 
-STEP 4: Compare priorities
+STEP 3: Compare in top
 ─────────────────────────────────────────────────────────────────
 /tmp/priority-lab/cpu-burner.sh &
 nice -n 19 /tmp/priority-lab/cpu-burner.sh &
-top  # Press P, observe CPU differences
+top
+# Press Shift+P to sort by CPU
+# Observe differences
+# Press q to quit
 pkill -f cpu-burner
-
-
-STEP 5: User permissions
-─────────────────────────────────────────────────────────────────
-nice -n 10 /tmp/priority-lab/cpu-burner.sh &
-PID=$(pgrep -f cpu-burner)
-renice -n 5 -p $PID  # Fails
-renice -n 15 -p $PID  # Works
-kill $PID
 
 
 KEY CONCEPTS
@@ -812,38 +611,31 @@ Nice values:
 Commands:
   nice -n VALUE command
   renice -n VALUE -p PID
-  renice -n VALUE -u USER
 
 Permissions:
-  Users: Can only increase nice (0→19)
-  Root: Can set any value (-20→19)
+  Users: 0 to 19 only, can only increase
+  Root: -20 to 19, can do anything
 
 CPU allocation:
-  Lower nice = more CPU time
-  Higher nice = less CPU time
+  Lower nice = more CPU
+  Higher nice = less CPU
   Values are relative
-
-Common values:
-  -10: Important daemons
-    0: Normal processes
-   10: Background jobs
-   19: Lowest priority tasks
 
 
 EXAM TIPS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Critical commands:
-1. nice -n 10 command - Start with low priority
-2. renice -n 15 -p PID - Change running process
-3. ps -o pid,ni,cmd - View nice values
-4. sudo needed for negative nice
+1. nice -n 10 command
+2. renice -n 15 -p PID
+3. ps -o pid,ni,cmd
+4. top (Shift+P for CPU sort)
 
 Remember:
   Higher nice = lower priority
   Users can only increase nice
-  Root can do anything
   Use for batch jobs
+  top shows NI column
 
 EOF
 }
@@ -857,7 +649,6 @@ cleanup_lab() {
     # Kill test processes (regular and root-owned)
     pkill -u $(whoami) -f "cpu-burner" 2>/dev/null || true
     sudo pkill -f "cpu-burner" 2>/dev/null || true
-    pkill -u $(whoami) -f "stress-ng" 2>/dev/null || true
     
     # Remove test files
     rm -rf /tmp/priority-lab 2>/dev/null || true
