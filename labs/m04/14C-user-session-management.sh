@@ -171,17 +171,14 @@ TASK: View active users and sessions
 Learn to see who's logged in and what sessions exist.
 
 Requirements:
-  • List all users:
-    loginctl list-users
+  • List all logged-in users
   
-  • List all sessions:
-    loginctl list-sessions
+  • List all active sessions
   
-  • View details of your session:
-    loginctl show-session $XDG_SESSION_ID
+  • View details of your current session
+    (Hint: Your session ID is in $XDG_SESSION_ID)
   
-  • Or use session-status:
-    loginctl session-status $XDG_SESSION_ID
+  • Examine your session status
 
 Understanding output:
   - SESSION: Unique session ID
@@ -189,6 +186,8 @@ Understanding output:
   - USER: Username
   - SEAT: Physical or virtual seat (seat0 = console)
   - TTY: Terminal device
+
+Use loginctl commands to explore users and sessions.
 EOF
 }
 
@@ -270,27 +269,20 @@ TASK: Create sessions for test users
 Generate active sessions so you can manage them.
 
 Requirements:
-  • Switch to testuser1:
-    su - testuser1
+  • Switch to testuser1 and start a background process
+    (Use su to switch, start a sleep process to keep session alive)
   
-  • Start a background process:
-    sleep 300 &
+  • Exit back to your user
   
-  • Exit back to your user:
-    exit
+  • Verify testuser1 appears in the user list
   
-  • Verify testuser1 appears in users:
-    loginctl list-users
+  • Repeat for testuser2
   
-  • Repeat for testuser2:
-    su - testuser2
-    sleep 400 &
-    exit
-  
-  • List all sessions:
-    loginctl list-sessions
+  • List all sessions to see both users
 
 Both test users should now have active sessions.
+
+Hint: Background processes keep sessions alive after you exit.
 EOF
 }
 
@@ -370,15 +362,13 @@ TASK: Examine user process trees
 See the complete hierarchy of user processes.
 
 Requirements:
-  • View testuser1 process tree:
-    loginctl user-status testuser1
+  • View testuser1's process tree
+    (Use loginctl to show user status)
   
-  • View testuser2 process tree:
-    loginctl user-status testuser2
+  • View testuser2's process tree
   
-  • Compare with ps:
-    ps -fu testuser1
-    ps -fu testuser2
+  • Compare with ps command
+    (ps can filter by user with -u flag)
   
   • Observe the structure:
     - User slice
@@ -463,19 +453,17 @@ TASK: Terminate a specific session
 Kill one session while leaving others intact.
 
 Requirements:
-  • List all sessions:
-    loginctl list-sessions
+  • List all sessions to find session IDs
   
   • Find a testuser1 session ID
   
-  • Terminate that specific session:
-    loginctl terminate-session SESSION_ID
+  • Terminate that specific session
+    (Use loginctl terminate-session command)
   
-  • Verify it's gone:
-    loginctl list-sessions
+  • Verify it's gone from the session list
   
-  • Check if testuser1 still has processes:
-    ps -u testuser1
+  • Check if testuser1 still has processes
+    (Use ps with user filter)
 
 If testuser1 had multiple sessions, only one should be killed.
 If testuser1 had one session, all processes should be gone.
@@ -560,21 +548,16 @@ TASK: Terminate all user sessions
 Kill all of a user's sessions and processes at once.
 
 Requirements:
-  • Terminate all testuser1 sessions:
-    loginctl terminate-user testuser1
+  • Terminate all testuser1 sessions
+    (Use loginctl terminate-user command)
   
-  • Verify testuser1 is gone:
-    loginctl list-users
+  • Verify testuser1 is gone from user list
   
-  • Check no processes remain:
-    ps -u testuser1
+  • Check no processes remain
   
-  • Verify testuser2 unaffected:
-    loginctl list-users
-    ps -u testuser2
+  • Verify testuser2 is unaffected
   
-  • Clean up testuser2 too:
-    loginctl terminate-user testuser2
+  • Clean up testuser2 as well
 
 All test user sessions should now be terminated.
 EOF
