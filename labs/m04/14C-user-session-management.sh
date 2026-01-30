@@ -659,14 +659,30 @@ validate() {
     
     # CHECK 1: Test users terminated
     print_color "$CYAN" "[1/$total] Checking test user cleanup..."
-    local user1_active=$(loginctl list-users 2>/dev/null | grep -c "testuser1" || echo "0")
-    local user2_active=$(loginctl list-users 2>/dev/null | grep -c "testuser2" || echo "0")
+    
+    # Check if users still have active sessions
+    local user1_active=0
+    local user2_active=0
+    
+    if loginctl list-users 2>/dev/null | grep -q "testuser1"; then
+        user1_active=1
+    fi
+    
+    if loginctl list-users 2>/dev/null | grep -q "testuser2"; then
+        user2_active=1
+    fi
     
     if [ "$user1_active" -eq 0 ] && [ "$user2_active" -eq 0 ]; then
         print_color "$GREEN" "  ✓ All test user sessions terminated"
         ((score++))
     else
         print_color "$RED" "  ✗ Test users still have sessions"
+        if [ "$user1_active" -eq 1 ]; then
+            echo "  testuser1 still active"
+        fi
+        if [ "$user2_active" -eq 1 ]; then
+            echo "  testuser2 still active"
+        fi
         print_color "$YELLOW" "  Cleanup: loginctl terminate-user testuser1 testuser2"
     fi
     echo ""
