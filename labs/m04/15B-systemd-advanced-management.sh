@@ -42,6 +42,19 @@ sleep 2
 SCRIPT
     chmod +x /opt/lab-services/broken-service.sh
     
+    # Create the broken.service unit file (this was missing!)
+    cat > /etc/systemd/system/broken.service << 'UNIT'
+[Unit]
+Description=Intentionally Broken Service for Troubleshooting
+
+[Service]
+Type=simple
+ExecStart=/opt/lab-services/broken-service.sh
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    
     # Install httpd for dependency work
     if ! rpm -q httpd >/dev/null 2>&1; then
         dnf install -y httpd >/dev/null 2>&1
@@ -54,7 +67,7 @@ SCRIPT
     
     systemctl stop broken.service 2>/dev/null || true
     systemctl disable broken.service 2>/dev/null || true
-    rm -f /etc/systemd/system/broken.service 2>/dev/null || true
+    # Don't remove broken.service here since we just created it
     
     systemctl stop httpd 2>/dev/null || true
     systemctl disable httpd 2>/dev/null || true
@@ -62,10 +75,13 @@ SCRIPT
     
     systemctl unmask httpd 2>/dev/null || true
     
-    systemctl daemon-reload 2>/dev/null || true
+    # CRITICAL: Reload systemd so it sees broken.service
+    systemctl daemon-reload
     
     echo "  ✓ Lab scripts created in /opt/lab-services"
+    echo "  ✓ broken.service unit file created"
     echo "  ✓ Previous lab attempts cleaned up"
+    echo "  ✓ Systemd configuration reloaded"
     echo "  ✓ Environment ready"
 }
 
