@@ -656,11 +656,17 @@ validate_step_3() {
         print_color "$RED" "✗ lab-disk-monitor.timer not found"
         ((failures++))
     else
-        # Check OnCalendar schedule (accept variations like *:0/10 or *:00/10 or *-*-* *:00/10)
-        if ! grep -qE "OnCalendar=\*(-\*-\* )?\*:0{0,2}/10" /etc/systemd/system/lab-disk-monitor.timer; then
+        # Check OnCalendar schedule - accept multiple valid formats
+        # Valid: *:00/10, *:0/10, *-*-* *:00/10, *-*-* *:0/10:00
+        if grep -qE "OnCalendar=(\*-\*-\* )?\*:0{0,2}/10(:00)?" /etc/systemd/system/lab-disk-monitor.timer; then
+            # Valid schedule found, no error
+            :
+        else
             echo ""
             print_color "$RED" "✗ Timer OnCalendar schedule incorrect"
-            echo "  Expected: OnCalendar=*:00/10 (or similar)"
+            echo "  Expected: OnCalendar=*:00/10 (or similar valid format)"
+            echo "  Your timer contains:"
+            grep "OnCalendar=" /etc/systemd/system/lab-disk-monitor.timer
             ((failures++))
         fi
     fi
@@ -1102,12 +1108,15 @@ validate() {
     # CHECK 5: Disk monitor timer schedule
     print_color "$CYAN" "[5/$total] Checking lab-disk-monitor.timer..."
     if [ -f /etc/systemd/system/lab-disk-monitor.timer ]; then
-        if grep -qE "OnCalendar=\*(-\*-\* )?\*:0{0,2}/10" /etc/systemd/system/lab-disk-monitor.timer; then
+        # Accept multiple valid formats for every 10 minutes
+        if grep -qE "OnCalendar=(\*-\*-\* )?\*:0{0,2}/10(:00)?" /etc/systemd/system/lab-disk-monitor.timer; then
             print_color "$GREEN" "  ✓ Monitor timer schedule correct (every 10 minutes)"
             ((score++))
         else
             print_color "$RED" "  ✗ Monitor timer schedule incorrect"
-            print_color "$YELLOW" "  Expected: OnCalendar=*:00/10"
+            print_color "$YELLOW" "  Expected: OnCalendar=*:00/10 (or similar)"
+            echo "  Your timer contains:"
+            grep "OnCalendar=" /etc/systemd/system/lab-disk-monitor.timer || echo "  No OnCalendar found"
         fi
     else
         print_color "$RED" "  ✗ lab-disk-monitor.timer not found"
