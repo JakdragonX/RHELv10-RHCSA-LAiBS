@@ -132,10 +132,10 @@ OBJECTIVES:
      • Create config: /etc/tmpfiles.d/lab-cache.conf
      • Create directory: /tmp/lab-cache
      • Permissions: 1777 (sticky bit)
+     • Type: D (create and clean)
      • Age: 7 days (7d)
-     • Create test files with different ages
-     • Run cleanup manually to test age-based removal
-     • Verify old files are removed, new files remain
+     • Understand cleanup behavior (note: actual cleanup testing
+       requires files to naturally age due to ctime limitations)
 
 HINTS:
   • Type codes: d=create dir, D=create+clean, z=set permissions
@@ -144,14 +144,15 @@ HINTS:
   • Format: Type Path Mode User Group Age Argument
   • systemd-tmpfiles --create applies configurations
   • systemd-tmpfiles --clean removes old files based on age
+  • Note: Cleanup checks atime, mtime, AND ctime (most recent wins)
 
 SUCCESS CRITERIA:
   • All three tmpfiles configurations created correctly
   • Directories created with proper ownership and permissions
   • systemd-tmpfiles commands execute successfully
-  • Age-based cleanup works as expected
   • Configuration files follow proper syntax
   • Can verify configurations with systemd-tmpfiles --create
+  • Understand cleanup behavior (actual testing requires natural aging)
 EOF
 }
 
@@ -338,7 +339,7 @@ Age specifications:
 Age applies to:
   - D type (directory with cleanup)
   - Files inside the directory
-  - Based on modification time
+  - Based on atime, mtime, AND ctime (most recent)
 
 Configuration file priority:
 
@@ -737,7 +738,7 @@ Key difference from previous step:
   • Type D (not d) enables age-based cleanup
   • Files older than 30 days will be removed
   • When systemd-tmpfiles-clean.service runs
-  • Based on modification time (mtime)
+  • Based on atime, mtime, AND ctime (most recent wins)
 
 The D type:
   • Creates directory if doesn't exist (like d)
@@ -862,7 +863,7 @@ What gets cleaned:
 
 Files in the directory:
   - Regular files
-  - Based on modification time (mtime)
+  - Based on atime, mtime, AND ctime (most recent wins)
   - Older than specified age (30d)
   - Subdirectories also checked
 
@@ -879,31 +880,24 @@ Age specifications:
   12h - 12 hours
   7d  - 7 days
   
-  Based on: modification time (mtime)
-  Current time - file mtime > age threshold
+  Based on: The most recent of atime, mtime, or ctime
+  Current time - most_recent_timestamp > age threshold
 
-Testing cleanup behavior:
+IMPORTANT: How systemd-tmpfiles calculates age
+───────────────────────────────────────────────
 
-Create test files with different ages:
+systemd-tmpfiles checks THREE timestamps:
+  - atime (access time)
+  - mtime (modification time)
+  - ctime (change time)
 
-Recent file (won't be cleaned):
-  sudo touch /var/lib/lab-data/recent.txt
+It uses the MOST RECENT of these three.
 
-Old file (will be cleaned):
-  sudo touch /var/lib/lab-data/old.txt
-  sudo touch -d "40 days ago" /var/lib/lab-data/old.txt
+For a file to be cleaned:
+  ALL three timestamps must be older than threshold
 
-Check file age:
-  stat /var/lib/lab-data/old.txt
-  # Shows: Modify: [date 40 days ago]
-
-Manually trigger cleanup:
-  sudo systemd-tmpfiles --clean --prefix=/var/lib/lab-data
-
-Check results:
-  ls -la /var/lib/lab-data/
-  # old.txt should be gone
-  # recent.txt should remain
+This prevents accidental deletion of files that were
+recently accessed, modified, OR had metadata changed.
 
 Understanding cleanup safety:
 
@@ -975,17 +969,16 @@ EOF
 hint_step_4() {
     echo "  Create: /etc/tmpfiles.d/lab-cache.conf"
     echo "  Format: D /tmp/lab-cache 1777 root root 7d"
-    echo "  Test: Create files with different ages using touch -d"
-    echo "  Cleanup: systemd-tmpfiles --clean --prefix=/tmp/lab-cache"
+    echo "  Note: Cleanup testing requires files to naturally age"
+    echo "  The configuration is what matters for the exam"
 }
 
 # STEP 4
 show_step_4() {
     cat << 'EOF'
-TASK: Create temporary cache with age-based cleanup and test it
+TASK: Create temporary cache with age-based cleanup
 
-Create a cache directory with automatic cleanup, then test the
-age-based removal mechanism.
+Create a cache directory with automatic cleanup configuration.
 
 Requirements:
   • Create file: /etc/tmpfiles.d/lab-cache.conf
@@ -997,26 +990,33 @@ Requirements:
   • Age: 7d (7 days)
   
   • Apply configuration to create directory
-  • Create test files:
-    - One recent file (today)
-    - One old file (10 days ago using touch -d)
-  • Run cleanup manually
-  • Verify old file removed, recent file remains
+  • Verify directory creation and permissions
+  • Understand cleanup behavior
 
 Configuration line:
   D /tmp/lab-cache 1777 root root 7d
-
-Testing procedure:
-  1. Create the config and apply it
-  2. Create recent.txt (normal touch)
-  3. Create old.txt with old timestamp (touch -d "10 days ago")
-  4. Run: systemd-tmpfiles --clean --prefix=/tmp/lab-cache
-  5. Verify old.txt is gone, recent.txt remains
 
 The sticky bit (1777):
   - Anyone can create files
   - Only owner can delete their own files
   - Common for /tmp directories
+
+IMPORTANT NOTE: Cleanup testing limitation
+────────────────────────────────────────────
+systemd-tmpfiles cleanup checks atime, mtime, AND ctime,
+using the MOST RECENT of these three timestamps.
+
+You cannot simulate old files with touch -d because:
+  - touch -d sets mtime to the past
+  - BUT also sets ctime to NOW
+  - systemd-tmpfiles sees recent ctime
+  - File won't be cleaned
+
+Real cleanup works because naturally created files have
+all timestamps aging together over time.
+
+For the exam: Know how to create the configuration correctly.
+Actual cleanup testing requires files to age naturally (days/weeks).
 EOF
 }
 
@@ -1062,36 +1062,12 @@ validate_step_4() {
         fi
     fi
     
-    # Test cleanup functionality
-    # Create a recent file
-    touch /tmp/lab-cache/recent-file.txt 2>/dev/null
-    
-    # Create an old file (10 days ago)
-    touch /tmp/lab-cache/old-file.txt 2>/dev/null
-    touch -d "10 days ago" /tmp/lab-cache/old-file.txt 2>/dev/null
-    
-    # Run cleanup
-    systemd-tmpfiles --clean --prefix=/tmp/lab-cache >/dev/null 2>&1
-    
-    # Check that old file was removed
-    if [ -f /tmp/lab-cache/old-file.txt ]; then
-        echo ""
-        print_color "$RED" "✗ Old file was not cleaned up (age-based cleanup not working)"
-        echo "  File older than 7 days should be removed"
-        ((failures++))
-    fi
-    
-    # Check that recent file remains
-    if [ ! -f /tmp/lab-cache/recent-file.txt ]; then
-        echo ""
-        print_color "$RED" "✗ Recent file was incorrectly removed"
-        echo "  Files newer than 7 days should remain"
-        ((failures++))
-    fi
-    
     if [ $failures -gt 0 ]; then
         return 1
     fi
+    
+    # Note: We do NOT test actual cleanup because of the ctime limitation
+    # The configuration being correct is what matters for the exam
     
     return 0
 }
@@ -1126,39 +1102,63 @@ Should show:
   
 Note the 't' at the end - that's the sticky bit.
 
-Step 5: Create test files
-─────────────────────────
-Create a recent file:
-  sudo touch /tmp/lab-cache/recent.txt
+Understanding cleanup behavior:
 
-Create an old file (10 days ago):
-  sudo touch /tmp/lab-cache/old.txt
-  sudo touch -d "10 days ago" /tmp/lab-cache/old.txt
+IMPORTANT: systemd-tmpfiles cleanup limitation
+────────────────────────────────────────────────
 
-Create another old file (15 days ago):
-  sudo touch /tmp/lab-cache/very-old.txt
-  sudo touch -d "15 days ago" /tmp/lab-cache/very-old.txt
+systemd-tmpfiles --clean checks THREE timestamps:
+  - atime (access time)
+  - mtime (modification time)
+  - ctime (change time)
 
-Verify file ages:
-  stat /tmp/lab-cache/recent.txt
-  stat /tmp/lab-cache/old.txt
-  stat /tmp/lab-cache/very-old.txt
+It uses the MOST RECENT of these three timestamps.
 
-List all files:
-  ls -la /tmp/lab-cache/
+Why touch -d doesn't work for testing:
+  touch -d "10 days ago" file.txt
+  
+  This sets: mtime to 10 days ago
+  But also sets: ctime to NOW (when you ran the command)
+  
+  Result: systemd-tmpfiles sees ctime is recent, won't delete
 
-Step 6: Run cleanup manually
-─────────────────────────────
-sudo systemd-tmpfiles --clean --prefix=/tmp/lab-cache
+Real-world cleanup works because:
+  - Files created 10 days ago have ALL timestamps old
+  - Natural aging affects all three timestamps
+  - No manual timestamp manipulation
 
-Step 7: Verify cleanup results
-───────────────────────────────
-ls -la /tmp/lab-cache/
+How cleanup actually works in production:
 
-Expected results:
-  - recent.txt still exists (< 7 days old)
-  - old.txt is gone (> 7 days old)
-  - very-old.txt is gone (> 7 days old)
+Day 0: User creates /tmp/lab-cache/data.txt
+  atime: Feb 1
+  mtime: Feb 1
+  ctime: Feb 1
+
+Day 7: Cleanup runs
+  atime: Feb 1 (7 days old)
+  mtime: Feb 1 (7 days old)
+  ctime: Feb 1 (7 days old)
+  Most recent: Feb 1 (7 days old)
+  Result: File NOT deleted (exactly 7d, not > 7d)
+
+Day 8: Cleanup runs
+  All timestamps: Feb 1 (8 days old)
+  Most recent: Feb 1 (8 days old)
+  Result: File IS deleted (8 days > 7 days)
+
+For the exam:
+  You need to know:
+  ✓ How to create the configuration
+  ✓ Type D enables cleanup
+  ✓ Age format (7d, 30d, etc.)
+  ✓ Cleanup happens automatically via timer
+  
+  You do NOT need to:
+  ✗ Actually wait 7 days to test
+  ✗ Manipulate timestamps
+  ✗ Prove cleanup works in exam time
+
+The configuration is what the exam tests, not waiting a week.
 
 Understanding the sticky bit (1777):
 
@@ -1186,62 +1186,6 @@ Verify sticky bit:
   ls -ld /tmp/lab-cache
   # Shows 't' at end: drwxrwxrwt
 
-Testing age-based cleanup:
-
-Create files at different ages:
-
-Today:
-  touch file-today.txt
-
-2 days ago:
-  touch file-2days.txt
-  touch -d "2 days ago" file-2days.txt
-
-10 days ago:
-  touch file-10days.txt
-  touch -d "10 days ago" file-10days.txt
-
-30 days ago:
-  touch file-30days.txt
-  touch -d "30 days ago" file-30days.txt
-
-Check ages:
-  stat file-*.txt | grep Modify
-
-Run cleanup:
-  sudo systemd-tmpfiles --clean --prefix=/tmp/lab-cache
-
-Results with 7d threshold:
-  ✓ file-today.txt - Remains (0 days < 7 days)
-  ✓ file-2days.txt - Remains (2 days < 7 days)
-  ✗ file-10days.txt - Removed (10 days > 7 days)
-  ✗ file-30days.txt - Removed (30 days > 7 days)
-
-How age is calculated:
-
-Current time - file modification time > age threshold
-
-Example:
-  Current: Feb 3, 2026 14:30
-  File modified: Jan 24, 2026 14:30
-  Difference: 10 days
-  Threshold: 7 days
-  Result: 10 > 7, file is cleaned
-
-Age field values:
-
-Common ages:
-  7d   - 7 days (1 week)
-  14d  - 14 days (2 weeks)
-  30d  - 30 days (1 month)
-  1h   - 1 hour
-  12h  - 12 hours
-  1d   - 1 day
-
-Special values:
-  -    - No age limit (never clean)
-  0    - Clean immediately (all files)
-
 Understanding cleanup timing:
 
 Automatic cleanup:
@@ -1264,14 +1208,14 @@ Process:
   1. Reads all tmpfiles.d configurations
   2. Finds entries with Type D
   3. Checks files in those directories
-  4. Compares file age to threshold
-  5. Removes files older than threshold
+  4. Compares most recent timestamp to threshold
+  5. Removes files where all timestamps are old enough
 
 Safety:
   - Only removes regular files
   - Won't remove directories
   - Won't remove the configured directory itself
-  - Based on mtime (modification time)
+  - Based on most recent of atime/mtime/ctime
 
 Real-world use cases:
 
@@ -1291,26 +1235,34 @@ Use case 4: Log staging
   D /var/log/staging 0750 root root 3d
   Logs cleaned after 3 days
 
-Troubleshooting cleanup:
+Age field values:
 
-If files aren't being cleaned:
+Common ages:
+  7d   - 7 days (1 week)
+  14d  - 14 days (2 weeks)
+  30d  - 30 days (1 month)
+  1h   - 1 hour
+  12h  - 12 hours
+  1d   - 1 day
 
-1. Check age is specified:
-   D /tmp/cache 1777 root root 7d
-   Not: D /tmp/cache 1777 root root -
+Special values:
+  -    - No age limit (never clean)
+  0    - Clean immediately (all files)
 
-2. Check timer is active:
-   systemctl status systemd-tmpfiles-clean.timer
+Verification for exam:
 
-3. Manually trigger cleanup:
-   sudo systemd-tmpfiles --clean
+What you CAN verify:
+  ✓ Configuration file created correctly
+  ✓ Directory exists with correct permissions
+  ✓ Sticky bit is set (1777)
+  ✓ Type D is used (not d)
+  ✓ Age is specified (7d)
 
-4. Check file modification time:
-   stat /tmp/cache/file.txt
-   # Look at Modify timestamp
-
-5. Verify configuration:
-   cat /etc/tmpfiles.d/lab-cache.conf
+What you DON'T need to verify:
+  ✗ Actual cleanup works (time limitation)
+  ✗ Files are deleted after 7 days
+  
+The configuration is what the exam tests, not waiting a week.
 
 Common mistakes:
 
@@ -1332,28 +1284,24 @@ Mistake 3: Wrong age format
   
   Must include unit: d, h, w
 
-Mistake 4: Not running daemon-reload
-  After creating config, run:
-    systemctl daemon-reload
-  
-  Or just use systemd-tmpfiles --create
+Mistake 4: Expecting touch -d to work for testing
+  Problem: Changes ctime to NOW
+  Reality: Can't simulate old files this way
+  Solution: Trust the configuration, cleanup works in production
 
-Testing before production:
+Configuration file best practices:
 
-Dry run:
-  systemd-tmpfiles --clean --dry-run
+Add comments:
+  # Temporary cache with 7-day retention
+  D /tmp/lab-cache 1777 root root 7d
 
-This shows what would be deleted without actually deleting.
+Group related entries:
+  # Lab temporary directories
+  D /tmp/lab-cache 1777 root root 7d
+  D /tmp/lab-work 1777 root root 1d
 
-Specific directory:
-  systemd-tmpfiles --clean --prefix=/tmp/lab-cache
-
-Only affects specified path.
-
-Verbose output:
-  systemd-tmpfiles --clean --verbose
-
-Shows detailed information about what's happening.
+Use descriptive filenames:
+  lab-cache.conf (not just cache.conf)
 
 EOF
 }
@@ -1461,26 +1409,22 @@ validate() {
     fi
     echo ""
     
-    # CHECK 7: Age-based cleanup works
-    print_color "$CYAN" "[7/$total] Testing age-based cleanup..."
-    if [ -d /tmp/lab-cache ]; then
-        # Create test files
-        touch /tmp/lab-cache/test-recent.txt 2>/dev/null
-        touch /tmp/lab-cache/test-old.txt 2>/dev/null
-        touch -d "10 days ago" /tmp/lab-cache/test-old.txt 2>/dev/null
+    # CHECK 7: Understanding of cleanup behavior
+    print_color "$CYAN" "[7/$total] Verifying cleanup configuration..."
+    if [ -f /etc/tmpfiles.d/lab-cache.conf ] && [ -d /tmp/lab-cache ]; then
+        local has_type_d=$(grep -E "^D[[:space:]]" /etc/tmpfiles.d/lab-cache.conf)
+        local has_age=$(grep -E "7d" /etc/tmpfiles.d/lab-cache.conf)
         
-        # Run cleanup
-        systemd-tmpfiles --clean --prefix=/tmp/lab-cache >/dev/null 2>&1
-        
-        # Check results
-        if [ -f /tmp/lab-cache/test-recent.txt ] && [ ! -f /tmp/lab-cache/test-old.txt ]; then
-            print_color "$GREEN" "  ✓ Age-based cleanup working correctly"
+        if [ -n "$has_type_d" ] && [ -n "$has_age" ]; then
+            print_color "$GREEN" "  ✓ Cleanup configuration correct (Type D with 7d age)"
+            echo "    Note: Actual cleanup testing requires files to age naturally"
+            echo "    The configuration is what matters for the exam"
             ((score++))
         else
-            print_color "$RED" "  ✗ Age-based cleanup not working as expected"
+            print_color "$RED" "  ✗ Cleanup configuration incomplete"
         fi
     else
-        print_color "$RED" "  ✗ Cannot test - directory doesn't exist"
+        print_color "$RED" "  ✗ Cannot verify cleanup - missing config or directory"
     fi
     echo ""
     
@@ -1497,7 +1441,7 @@ validate() {
         echo "  • Using type D for cleanup-enabled directories"
         echo "  • Setting proper permissions and ownership"
         echo "  • Understanding age-based automatic cleanup"
-        echo "  • Testing cleanup behavior"
+        echo "  • Configuring sticky bit for shared directories"
         echo ""
         echo "You're ready for RHCSA tmpfiles questions!"
     elif [ $score -ge 5 ]; then
@@ -1528,6 +1472,15 @@ COMPLETE SOLUTION WALKTHROUGH
 
 See detailed solutions in each step's solution output above.
 
+KEY CONCEPTS FOR EXAM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Cleanup timestamp behavior:
+  systemd-tmpfiles checks atime, mtime, AND ctime
+  Uses the MOST RECENT of these three
+  All three must be old for cleanup to work
+  Cannot simulate with touch -d (updates ctime to NOW)
+
 EXAM TIPS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1537,8 +1490,7 @@ Critical skills for RHCSA:
 2. Type codes: d (create), D (create+clean)
 3. Format: Type Path Mode User Group Age
 4. Apply configs: systemd-tmpfiles --create
-5. Test cleanup: systemd-tmpfiles --clean
-6. Age format: 7d, 30d, 12h
+5. Age format: 7d, 30d, 12h
 
 Common patterns:
   Runtime dir:     d /run/app 0755 user group -
@@ -1562,6 +1514,7 @@ Remember:
   • Sticky bit (1777) for shared temp
   • Age in days (7d, 30d)
   • Apply with --create after editing
+  • Cleanup uses most recent timestamp (atime/mtime/ctime)
 
 EOF
 }
