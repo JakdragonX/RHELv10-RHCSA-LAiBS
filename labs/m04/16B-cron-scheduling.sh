@@ -1,16 +1,16 @@
 #!/bin/bash
-# labs/m04/17A-journald-basics.sh
-# Lab: Working with systemd-journald
-# Difficulty: Beginner
-# RHCSA Objective: 17.2, 17.3 - Using and configuring systemd-journald
+# labs/m04/16B-cron-scheduling.sh
+# Lab: Scheduling Tasks with Cron
+# Difficulty: Intermediate
+# RHCSA Objective: 16.3 - Scheduling tasks with cron
 
 # Source the lab framework
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../../lab-runner.sh"
 
 # Lab metadata
-LAB_NAME="Working with systemd-journald"
-LAB_DIFFICULTY="Beginner"
+LAB_NAME="Scheduling Tasks with Cron"
+LAB_DIFFICULTY="Intermediate"
 LAB_TIME_ESTIMATE="40-50 minutes"
 
 #############################################################################
@@ -19,57 +19,86 @@ LAB_TIME_ESTIMATE="40-50 minutes"
 setup_lab() {
     echo "Preparing lab environment..."
     
-    # Ensure journald is running
-    systemctl is-active systemd-journald >/dev/null 2>&1 || systemctl start systemd-journald
-    
-    # Remove persistent journal if it exists from previous attempts
-    if [ -d /var/log/journal ]; then
-        systemctl stop systemd-journald 2>/dev/null || true
-        rm -rf /var/log/journal 2>/dev/null || true
-        systemctl start systemd-journald 2>/dev/null || true
+    # Ensure crond is installed and running
+    if ! rpm -q cronie >/dev/null 2>&1; then
+        dnf install -y cronie >/dev/null 2>&1
     fi
     
-    # Remove any custom journald configuration
-    rm -rf /etc/systemd/journald.conf.d/ 2>/dev/null || true
+    # Ensure crond is enabled and running
+    systemctl enable --now crond >/dev/null 2>&1
     
-    # Ensure we start with volatile journal
-    systemctl restart systemd-journald 2>/dev/null || true
+    # Create lab directory for scripts
+    mkdir -p /opt/lab-cron
     
-    # Create some test log entries for exploration
-    logger -p user.info "Lab 17A: Test INFO message from setup"
-    logger -p user.notice "Lab 17A: Test NOTICE message"
-    logger -p user.warning "Lab 17A: Test WARNING message"
-    logger -p user.err "Lab 17A: Test ERROR message"
-    logger -p user.crit "Lab 17A: Test CRITICAL message"
+    # Create a database backup script
+    cat > /opt/lab-cron/db-backup.sh << 'SCRIPT'
+#!/bin/bash
+# Database backup script
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+LOG_FILE="/var/log/lab-cron-backup.log"
+echo "[$TIMESTAMP] Database backup executed" >> "$LOG_FILE"
+# Simulate backup
+echo "[$TIMESTAMP] Backup completed successfully" >> "$LOG_FILE"
+SCRIPT
+    chmod +x /opt/lab-cron/db-backup.sh
     
-    # Generate some service activity
-    systemctl restart sshd 2>/dev/null || true
-    systemctl restart crond 2>/dev/null || true
+    # Create a system health check script
+    cat > /opt/lab-cron/health-check.sh << 'SCRIPT'
+#!/bin/bash
+# System health monitoring script
+TIMESTAMP=$(date +%Y-%m-%d_%H:%M:%S)
+LOG_FILE="/var/log/lab-health-check.log"
+echo "[$TIMESTAMP] Health check started" >> "$LOG_FILE"
+uptime >> "$LOG_FILE"
+df -h / | tail -1 >> "$LOG_FILE"
+echo "[$TIMESTAMP] Health check completed" >> "$LOG_FILE"
+SCRIPT
+    chmod +x /opt/lab-cron/health-check.sh
     
-    # Create a broken service for troubleshooting practice
-    cat > /etc/systemd/system/lab-broken.service << 'EOF'
-[Unit]
-Description=Lab Broken Service for Testing
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/nonexistent-command
-Restart=no
-
-[Install]
-WantedBy=multi-user.target
-EOF
+    # Create a report generation script
+    cat > /opt/lab-cron/generate-report.sh << 'SCRIPT'
+#!/bin/bash
+# Weekly report generation
+TIMESTAMP=$(date +%Y-%m-%d_%H:%M:%S)
+LOG_FILE="/var/log/lab-weekly-report.log"
+echo "[$TIMESTAMP] Generating weekly report" >> "$LOG_FILE"
+echo "System uptime: $(uptime -p)" >> "$LOG_FILE"
+echo "[$TIMESTAMP] Report generation completed" >> "$LOG_FILE"
+SCRIPT
+    chmod +x /opt/lab-cron/generate-report.sh
     
-    systemctl daemon-reload
-    systemctl start lab-broken.service 2>/dev/null || true
+    # Create test users for cron access control
+    useradd -m cronuser1 2>/dev/null || true
+    useradd -m cronuser2 2>/dev/null || true
+    useradd -m cronuser3 2>/dev/null || true
     
-    echo "  ✓ systemd-journald service verified"
-    echo "  ✓ Persistent journal removed (starting with volatile)"
-    echo "  ✓ Custom configurations removed"
-    echo "  ✓ Test log entries created"
-    echo "  ✓ Service activity generated"
-    echo "  ✓ Broken service created for troubleshooting practice"
+    # Set passwords for test users
+    echo "cronuser1:password" | chpasswd 2>/dev/null
+    echo "cronuser2:password" | chpasswd 2>/dev/null
+    echo "cronuser3:password" | chpasswd 2>/dev/null
+    
+    # Clean up any previous lab cron jobs
+    crontab -u cronuser1 -r 2>/dev/null || true
+    crontab -u cronuser2 -r 2>/dev/null || true
+    crontab -u cronuser3 -r 2>/dev/null || true
+    crontab -u root -r 2>/dev/null || true
+    
+    # Clean up previous cron.allow/deny configurations
+    rm -f /etc/cron.allow 2>/dev/null || true
+    rm -f /etc/cron.deny 2>/dev/null || true
+    
+    # Clean up previous drop-in cron jobs
+    rm -f /etc/cron.d/lab-* 2>/dev/null || true
+    
+    # Clean up log files
+    rm -f /var/log/lab-cron-backup.log 2>/dev/null || true
+    rm -f /var/log/lab-health-check.log 2>/dev/null || true
+    rm -f /var/log/lab-weekly-report.log 2>/dev/null || true
+    
+    echo "  ✓ Cron service enabled and running"
+    echo "  ✓ Lab scripts created in /opt/lab-cron"
+    echo "  ✓ Test users created (cronuser1, cronuser2, cronuser3)"
+    echo "  ✓ Previous lab attempts cleaned up"
     echo "  ✓ Environment ready"
 }
 
@@ -79,36 +108,37 @@ EOF
 prerequisites() {
     cat << 'EOF'
 Knowledge Requirements:
-  • Basic understanding of systemd
-  • Familiarity with log files and logging concepts
-  • Understanding of file permissions
-  • Ability to read man pages
+  • Understanding of Linux scheduling concepts
+  • Familiarity with cron time syntax
+  • Basic shell scripting knowledge
+  • Understanding of user permissions
 
 Commands You'll Use:
-  • journalctl - Query and display journal logs
-  • systemctl - Manage systemd services
-  • logger - Generate test log messages
-  • mkdir - Create directories
-  • ls, stat - Examine files and directories
+  • crontab -e - Edit user's crontab
+  • crontab -l - List user's crontab entries
+  • crontab -r - Remove user's crontab
+  • crontab -u USER - Operate on another user's crontab (root only)
+  • systemctl status crond - Check cron daemon status
 
 Files You'll Interact With:
-  • /run/log/journal/ - Volatile journal storage (default)
-  • /var/log/journal/ - Persistent journal storage (you'll create)
-  • /etc/systemd/journald.conf.d/ - Journal configuration drop-ins
+  • /etc/crontab - System-wide crontab (view only, don't edit)
+  • /etc/cron.d/ - Drop-in directory for system cron jobs
+  • /etc/cron.allow - Users allowed to use cron
+  • /etc/cron.deny - Users denied from using cron
+  • /var/spool/cron/ - User crontab storage (managed by crontab command)
+  • /var/log/cron - Cron execution log
 
 Key Concepts:
-  • systemd-journald collects logs from kernel, services, and applications
-  • Journal is non-persistent by default (stored in RAM)
-  • Persistent storage requires /var/log/journal directory
-  • Journal can be filtered by priority, unit, time, and boot
-  • Storage settings control where and how logs are kept
-  • Journal must be flushed after creating persistent storage
+  • Cron runs as the crond service
+  • Each user can have their own crontab
+  • System cron jobs go in /etc/cron.d/
+  • Cron time format: minute hour day month weekday command
+  • Scripts must be executable and use absolute paths
 
 Reference Material:
-  • man journalctl - Query the journal
-  • man journald.conf - Journal configuration
-  • man systemd-journald - Journal service
-  • man systemd.directives - All systemd directives
+  • man 5 crontab - Crontab file format
+  • man 1 crontab - Crontab command
+  • man 8 cron - Cron daemon
 EOF
 }
 
@@ -118,64 +148,68 @@ EOF
 scenario() {
     cat << 'EOF'
 SCENARIO:
-You're a system administrator managing a RHEL 10 server. Your team needs
-to investigate service failures, analyze security events, and review
-historical logs across reboots. Currently, the systemd journal only keeps
-logs in memory, which means they're lost on reboot. You need to master
-journal querying and configure persistent storage.
+You're a system administrator managing a RHEL server that needs scheduled
+maintenance tasks. While the company is moving to systemd timers, some legacy
+applications and scripts still use cron. You need to configure user cron jobs,
+system-wide cron jobs, and manage cron access control.
 
 BACKGROUND:
-The systemd journal (journald) is the centralized logging system in modern
-RHEL. Unlike traditional syslog which writes plain text files, journald
-stores structured binary logs that can be efficiently queried and filtered.
-Understanding journalctl and journal persistence is essential for the RHCSA
-exam and real-world troubleshooting.
+Cron is the traditional Unix/Linux job scheduler. While systemd timers are
+preferred for new tasks in RHEL 10, cron is still widely used and fully
+supported. Understanding cron is essential for managing legacy systems and
+is tested on the RHCSA exam.
 
 OBJECTIVES:
-  1. Master journalctl filtering and querying capabilities
-     • Explore different ways to filter log entries
-     • Understand priority levels and their meanings
-     • Filter by service units and time periods
-     • Examine boot logs and kernel messages
-     • Determine current journal storage mode
+  1. Explore cron configuration and understand the time format
+     • Check that crond service is running
+     • View the system crontab (/etc/crontab) for examples
+     • Understand cron time field format
+     • View existing cron logs
+     • Learn about cron directories
      
-  2. Configure persistent journal storage across reboots
-     • Determine current storage location and mode
-     • Create necessary directory structure
-     • Set appropriate ownership and permissions
-     • Force journal to switch to persistent storage
-     • Verify journal files are being written to disk
+  2. Create user crontab entries for scheduled backups
+     • Create crontab for root user
+     • Schedule database backup: daily at 1:30 AM
+       Command: /opt/lab-cron/db-backup.sh
+     • Schedule health checks: every 6 hours
+       Command: /opt/lab-cron/health-check.sh
+     • Verify crontab entries are saved
+     • Check cron logs for execution
      
-  3. Configure journal size limits and retention policies
-     • Understand default journal size behavior
-     • Learn about configuration file locations
-     • Configure maximum disk usage limits
-     • Set retention time for old logs
-     • Understand rotation triggers
+  3. Create system-wide cron job in /etc/cron.d/
+     • Create file: /etc/cron.d/lab-reports
+     • Schedule weekly report: Every Sunday at 11:00 PM
+       User: root
+       Command: /opt/lab-cron/generate-report.sh
+     • Include proper format with username field
+     • Verify cron picks up the job
      
-  4. Use journal for practical troubleshooting scenarios
-     • Investigate service startup failures
-     • Correlate events across multiple services
-     • Find authentication failures and security events
-     • Use structured fields for precise filtering
-     • Extract useful information from verbose output
+  4. Manage cron access control
+     • Create /etc/cron.allow
+     • Add only cronuser1 and cronuser2 to cron.allow
+     • User cronuser3 should be denied (by omission)
+     • Verify allowed users can create crontabs
+     • Confirm that cronuser3 is denied access
 
 HINTS:
-  • Start by reading man journalctl to understand all options
-  • Priority levels range from 0 (emerg) to 7 (debug)
-  • Lower numbers are MORE severe, not less
-  • Creating /var/log/journal alone isn't enough
-  • You must flush the journal after creating the directory
-  • Journal configuration uses drop-in files, not editing service
-  • Boot logs require persistent storage to view historical boots
+  • Cron format: minute hour day month weekday command
+  • Use * for "any" value
+  • Use */N for "every N" intervals
+  • User crontabs: crontab -e
+  • System cron: /etc/cron.d/ with username field
+  • View logs: tail /var/log/cron
+  • If cron.allow exists, cron.deny is ignored
+  • Root can always manage crontabs with -u, but access control affects
+    whether users can run crontab commands themselves
 
 SUCCESS CRITERIA:
-  • Can query journal logs with multiple filter types
-  • Understand difference between volatile and persistent storage
-  • /var/log/journal directory exists with correct permissions
-  • Journal files are actively being written to persistent storage
-  • Understand how to limit journal disk usage
-  • Can investigate real service failures using the journal
+  • Root user has crontab with two scheduled jobs
+  • System cron job exists in /etc/cron.d/
+  • Cron access control properly configured
+  • Only cronuser1 and cronuser2 are in cron.allow
+  • cronuser3 is NOT in cron.allow (denied by omission)
+  • All scripts are executable
+  • Cron logs show job execution attempts
 EOF
 }
 
@@ -184,10 +218,10 @@ EOF
 #############################################################################
 objectives_quick() {
     cat << 'EOF'
-  ☐ 1. Master journalctl filtering (priority, unit, time, boot)
-  ☐ 2. Configure persistent journal storage
-  ☐ 3. Configure journal size and retention limits
-  ☐ 4. Troubleshoot service failures using journal
+  ☐ 1. Explore cron configuration and time format
+  ☐ 2. Create user crontab for root with two jobs
+  ☐ 3. Create system cron job in /etc/cron.d/
+  ☐ 4. Configure cron access control with cron.allow
 EOF
 }
 
@@ -201,72 +235,46 @@ get_step_count() {
 
 scenario_context() {
     cat << 'EOF'
-You're learning to manage systemd journal logs, including querying,
-filtering, persistence, and using logs for real troubleshooting.
+You're configuring cron jobs for automated maintenance on a RHEL server.
+You'll create user crontabs, system-wide cron jobs, and manage access control.
 EOF
 }
 
 # STEP 1
 show_step_1() {
     cat << 'EOF'
-TASK: Master journalctl filtering and querying capabilities
+TASK: Explore cron configuration and understand the time format
 
-Learn to effectively query the systemd journal using various filters.
-Do NOT just run commands - understand the filtering concepts.
+Before creating cron jobs, understand how cron works and its time format.
 
 Requirements:
-  • View recent journal entries (all logs)
-  • Filter logs by priority level:
-    - Only error messages and higher severity
-    - Only warning messages and higher severity
-    - Understand the priority number scale (0-7)
-  
-  • Filter logs by specific service units:
-    - View SSH daemon logs only
-    - View logs for the journald service itself
-    - Combine multiple units in one query
-  
-  • Filter logs by time periods:
-    - Show only logs from the last hour
-    - Show only today's logs
-    - Show logs between specific timestamps
-  
-  • View boot-specific logs:
-    - Show only logs from current boot
-    - Understand why historical boots aren't available yet
-  
-  • Follow logs in real-time (like tail -f)
-  
-  • Determine current journal storage mode:
-    - Find out if journal is volatile or persistent
-    - Identify where journal files are currently stored
+  • Verify crond service is running
+  • View /etc/crontab for format examples
+  • Understand the five time fields
+  • Check existing cron logs
+  • Explore cron directories
 
-Priority levels to understand:
-  0 - emerg (Emergency) - System unusable
-  1 - alert (Alert) - Immediate action required
-  2 - crit (Critical) - Critical conditions
-  3 - err (Error) - Error conditions
-  4 - warning (Warning) - Warning conditions
-  5 - notice (Notice) - Normal but significant
-  6 - info (Informational) - Informational messages
-  7 - debug (Debug) - Debug messages
+Questions to explore:
+  • Is the crond service running?
+  • What is the format of cron time specifications?
+  • Where are user crontabs stored?
+  • Where are system cron jobs located?
+  • How do you view cron execution logs?
 
-When you filter by priority, you get that level AND everything
-more severe (lower numbers).
+Key commands to use:
+  systemctl status crond
+  cat /etc/crontab
+  ls -la /etc/cron.d/
+  ls -la /var/spool/cron/
+  tail /var/log/cron
 
-Exploration strategy:
-  1. Read man journalctl to understand options
-  2. Try viewing all logs first
-  3. Experiment with different filter combinations
-  4. Check where current journal files are stored
-  5. Generate test logs with logger command to see filtering
-
-Questions to answer:
-  • Where are the current journal files stored?
-  • Is the journal volatile or persistent?
-  • How many log entries are there from sshd?
-  • What errors occurred in the last hour?
-  • Can you see logs from previous boots?
+Cron time format:
+  minute (0-59)
+  hour (0-23)
+  day of month (1-31)
+  month (1-12)
+  day of week (0-7, 0 and 7 are Sunday)
+  command to execute
 EOF
 }
 
@@ -276,15 +284,10 @@ validate_step_1() {
 }
 
 hint_step_1() {
-    echo "  Read options: man journalctl"
-    echo "  View all: journalctl (no options)"
-    echo "  Filter priority: -p option with level name or number"
-    echo "  Filter service: -u option with unit name"
-    echo "  Filter time: --since and --until options"
-    echo "  Current boot: -b option"
-    echo "  Follow mode: -f option"
-    echo "  Storage check: Look at first line of journalctl output"
-    echo "  Or check: ls /run/log/journal/ and ls /var/log/journal/"
+    echo "  Check service: systemctl status crond"
+    echo "  View examples: cat /etc/crontab"
+    echo "  Check logs: tail /var/log/cron"
+    echo "  Format: minute hour day month weekday command"
 }
 
 solution_step_1() {
@@ -292,299 +295,224 @@ solution_step_1() {
 
 SOLUTION:
 ─────────
+Check crond service status:
+  systemctl status crond
 
-Understanding journalctl basics:
+Should show: active (running)
 
-Read the manual first:
-  man journalctl
+View system crontab for examples:
+  cat /etc/crontab
 
-Look for sections on:
-  - Filtering options
-  - Priority levels
-  - Time specifications
-  - Output formats
+Output shows format:
+  # Example of job definition:
+  # .---------------- minute (0 - 59)
+  # |  .------------- hour (0 - 23)
+  # |  |  .---------- day of month (1 - 31)
+  # |  |  |  .------- month (1 - 12) OR jan,feb,mar,apr ...
+  # |  |  |  |  .---- day of week (0 - 6) (Sunday=0 or 7) OR sun,mon,tue,wed,thu,fri,sat
+  # |  |  |  |  |
+  # *  *  *  *  * user-name  command to be executed
 
-View all journal entries:
-  journalctl
+View cron directories:
+  ls -l /etc/cron.d/
+  ls -l /etc/cron.daily/
+  ls -l /etc/cron.hourly/
+  ls -l /etc/cron.weekly/
+  ls -l /etc/cron.monthly/
 
-This shows entire journal. Use:
-  - Space to page down
-  - 'q' to quit
-  - '/' to search
+View user crontab storage:
+  ls -l /var/spool/cron/
 
-Filter by priority:
+Check cron logs:
+  tail -20 /var/log/cron
 
-Show errors and higher (err, crit, alert, emerg):
-  journalctl -p err
+Understanding cron time format:
 
-Or using number:
-  journalctl -p 3
+Field positions:
+  1. Minute (0-59)
+  2. Hour (0-23)
+  3. Day of month (1-31)
+  4. Month (1-12 or names: jan, feb, etc.)
+  5. Day of week (0-7 or names: sun, mon, etc.)
+     Note: 0 and 7 both represent Sunday
 
-Show warnings and higher:
-  journalctl -p warning
-  journalctl -p 4
+Special characters:
+  *        Any value (matches all)
+  */N      Every N units (e.g., */5 = every 5 minutes)
+  X-Y      Range (e.g., 1-5 = Monday through Friday)
+  X,Y,Z    List (e.g., 1,3,5 = Monday, Wednesday, Friday)
 
-Remember: Lower numbers = MORE severe
-  -p err gives you priorities 0-3
-  -p warning gives you priorities 0-4
+Common examples:
 
-Filter by service unit:
+Daily at 1:30 AM:
+  30 1 * * * command
+  - Minute: 30
+  - Hour: 1 (1 AM)
+  - Day: * (every day)
+  - Month: * (every month)
+  - Weekday: * (every day of week)
 
-Show SSH daemon logs:
-  journalctl -u sshd.service
+Every 6 hours:
+  0 */6 * * * command
+  - Runs at: 00:00, 06:00, 12:00, 18:00
 
-Show journald's own logs:
-  journalctl -u systemd-journald.service
+Every 15 minutes:
+  */15 * * * * command
+  - Runs at: :00, :15, :30, :45 of every hour
 
-Multiple units:
-  journalctl -u sshd.service -u crond.service
+Weekdays at 9 AM:
+  0 9 * * 1-5 command
+  - Monday through Friday at 9:00 AM
 
-Filter by time:
+Sunday at 11 PM:
+  0 23 * * 0 command
+  - Or: 0 23 * * sun command
 
-Last hour:
-  journalctl --since "1 hour ago"
-  journalctl --since "-1 hours"
+First day of month at midnight:
+  0 0 1 * * command
 
-Today only:
-  journalctl --since today
+Every Monday and Wednesday at 2:30 PM:
+  30 14 * * 1,3 command
 
-Yesterday:
-  journalctl --since yesterday --until today
+Cron directories explained:
 
-Specific time range:
-  journalctl --since "2026-02-08 00:00:00" --until "2026-02-08 12:00:00"
+/etc/cron.d/:
+  - Drop-in directory for system cron jobs
+  - Files here are read by cron
+  - Must include username field
+  - Good for package-provided jobs
 
-Current boot only:
-  journalctl -b
+/etc/cron.hourly/:
+  - Scripts run every hour
+  - Managed by anacron
+  - Scripts must be executable
+  - No .sh extension needed
 
-This limits to logs since the most recent boot.
+/etc/cron.daily/:
+  - Scripts run once daily
+  - Managed by anacron
+  - Good for maintenance tasks
 
-Previous boots (requires persistent journal):
-  journalctl --list-boots
+/etc/cron.weekly/:
+  - Scripts run once weekly
+  - Sunday by default
 
-If journal is volatile, you'll only see current boot.
+/etc/cron.monthly/:
+  - Scripts run once monthly
+  - First day of month
 
-Follow mode (real-time):
-  journalctl -f
+/var/spool/cron/:
+  - User crontab storage
+  - Don't edit directly!
+  - Use crontab command instead
 
-Shows new entries as they appear.
-Press Ctrl+C to stop.
+Cron log format:
+  tail /var/log/cron
 
-Combining filters:
+Shows:
+  - When cron jobs start
+  - Exit status
+  - Any errors
+  - User who ran the job
 
-SSH errors from last hour:
-  journalctl -u sshd.service -p err --since "1 hour ago"
+Example log entry:
+  Feb  3 01:30:01 localhost CROND[12345]: (root) CMD (/opt/lab-cron/db-backup.sh)
 
-All warnings since boot:
-  journalctl -p warning -b
+Key differences: User crontab vs System crontab
 
-Checking storage mode:
+User crontab (crontab -e):
+  Format: minute hour day month weekday command
+  Runs as: The user who owns the crontab
+  Location: /var/spool/cron/username
+  Edit with: crontab -e
 
-Method 1 - Look at journal output:
-  journalctl | head -1
-
-Shows something like:
-  "-- Journal begins at [date], ends at [date]. --"
-
-Or might explicitly say "Runtime Journal" (volatile).
-
-Method 2 - Check file locations:
-  ls /run/log/journal/
-
-This should show directories (volatile storage).
-
-  ls /var/log/journal/
-
-If this fails with "No such file or directory", then
-journal is volatile-only.
-
-Method 3 - Check with grep:
-  journalctl | grep -E 'Runtime|System' | head -1
-
-Generating test logs:
-
-Create test entries:
-  logger -p user.info "Test info message"
-  logger -p user.err "Test error message"
-
-Then filter to find them:
-  journalctl -p info --since "1 minute ago"
-
-Understanding the output:
-
-Default output format:
-  Feb 08 10:30:15 hostname service[1234]: Message text
-
-Fields:
-  - Timestamp
-  - Hostname
-  - Service name and PID
-  - Log message
-
-Verbose output (shows all metadata):
-  journalctl -o verbose
-
-Shows structured data like:
-  MESSAGE=
-  PRIORITY=
-  _SYSTEMD_UNIT=
-  _PID=
-  _HOSTNAME=
-
-Useful filtering patterns:
-
-Kernel messages only:
-  journalctl -k
-
-Same as:
-  journalctl -b -u kernel
-
-Last 20 entries:
-  journalctl -n 20
-
-Reverse order (newest first):
-  journalctl -r
-
-With explanation text:
-  journalctl -x
-
-Jump to end:
-  journalctl -e
-
-Common troubleshooting queries:
-
-Recent errors across all services:
-  journalctl -p err --since "1 hour ago"
-
-Service startup issues:
-  journalctl -u servicename.service -b
-
-Authentication failures:
-  journalctl -u sshd.service -p warning
-
-Boot messages:
-  journalctl -b -p warning
-
-Key takeaway:
-
-The journal is queryable like a database. You can combine
-multiple filters to narrow down exactly what you need.
-
-Priority levels are critical to understand:
-  - emerg(0) through debug(7)
-  - Lower number = MORE severe
-  - Filtering by a level includes all more severe levels
+System crontab (/etc/cron.d/):
+  Format: minute hour day month weekday user command
+  Runs as: Specified user
+  Location: /etc/cron.d/filename
+  Edit with: vi or text editor
 
 EOF
 }
 
 hint_step_2() {
-    echo "  Check current location: ls /run/log/journal/"
-    echo "  Create directory: mkdir command for /var/log/journal"
-    echo "  Set permissions: Use systemd-tmpfiles or chown/chmod"
-    echo "  Restart service: systemctl restart systemd-journald"
-    echo "  CRITICAL: Run journalctl --flush to write to new location"
-    echo "  Verify: ls /var/log/journal/"
+    echo "  Edit crontab: crontab -e"
+    echo "  Daily 1:30 AM: 30 1 * * * /opt/lab-cron/db-backup.sh"
+    echo "  Every 6 hours: 0 */6 * * * /opt/lab-cron/health-check.sh"
+    echo "  List entries: crontab -l"
 }
 
 # STEP 2
 show_step_2() {
     cat << 'EOF'
-TASK: Configure persistent journal storage across reboots
+TASK: Create user crontab entries for scheduled maintenance
 
-Make the journal survive reboots by enabling persistent storage.
-
-Current situation:
-  Journal is stored in /run/log/journal/ which is a tmpfs
-  (RAM-based filesystem). All logs are lost on reboot.
-
-Your goal:
-  Configure journal to store logs in /var/log/journal/
-  so they persist across reboots.
+Create cron jobs in the root user's crontab for backups and monitoring.
 
 Requirements:
-  • Verify current storage location (should be /run)
+  • Edit root's crontab (as root user)
+  • Add job 1: Database backup daily at 1:30 AM
+    Command: /opt/lab-cron/db-backup.sh
   
-  • Create the persistent journal directory
-    - Location: /var/log/journal
-    - Appropriate ownership
-    - Appropriate permissions
+  • Add job 2: Health check every 6 hours
+    Command: /opt/lab-cron/health-check.sh
   
-  • Restart the systemd-journald service
-  
-  • CRITICAL STEP: Force journal to flush to new location
-    There's a specific journalctl command that forces
-    the journal to write from /run to /var
-  
-  • Verify journal files exist in /var/log/journal
-  
-  • Verify new log entries are being written there
+  • Save and verify the crontab
+  • List the crontab to confirm entries
+  • Check cron logs for activity
 
-Important concepts to understand:
-  • Simply creating /var/log/journal isn't enough
-  • Journal needs to be told to switch locations
-  • There's a --flush option for journalctl
-  • Proper permissions are critical for journald to write
+Cron time specifications:
+  Daily at 1:30 AM:    30 1 * * *
+  Every 6 hours:       0 */6 * * *
 
-Testing your work:
-  • Generate a test log entry after configuration
-  • Verify it appears in /var/log/journal files
-  • Check that future boots will have this directory
+Important notes:
+  • Use absolute paths for commands
+  • Don't include username in user crontabs
+  • Scripts must be executable
+  • Cron runs jobs even if user not logged in
 
-Why persistence matters:
-  • View logs from previous boots
-  • Investigate issues that caused crashes
-  • Security auditing and compliance
-  • Historical troubleshooting
-
-Read the following before starting:
-  man journalctl (look for --flush)
-  man journald.conf (understand Storage= option)
-  man systemd-tmpfiles (for permission handling)
+Commands you'll use:
+  crontab -e          Edit current user's crontab
+  crontab -l          List current user's crontab
+  crontab -r          Remove current user's crontab
 EOF
 }
 
 validate_step_2() {
     local failures=0
     
-    # Check if /var/log/journal exists
-    if [ ! -d /var/log/journal ]; then
+    # Check if root has a crontab
+    if ! crontab -u root -l >/dev/null 2>&1; then
         echo ""
-        print_color "$RED" "✗ /var/log/journal directory not found"
-        echo "  Create this directory to enable persistent storage"
+        print_color "$RED" "✗ Root user has no crontab"
+        echo "  Create with: crontab -e"
         ((failures++))
         return 1
     fi
     
-    # Give journald a moment to write
-    sleep 2
+    # Get root's crontab content
+    local crontab_content=$(crontab -u root -l 2>/dev/null)
     
-    # Check if journal files exist in /var/log/journal
-    if ! ls /var/log/journal/*/system.journal >/dev/null 2>&1; then
+    # Check for daily backup job at 1:30 AM
+    if echo "$crontab_content" | grep -q "30 1 \* \* \*.*db-backup.sh"; then
+        # Found the job
+        :
+    else
         echo ""
-        print_color "$RED" "✗ No journal files found in /var/log/journal"
-        echo "  Did you run journalctl --flush after creating the directory?"
-        echo "  The journal needs to be flushed to switch from /run to /var"
+        print_color "$RED" "✗ Daily backup job not found or incorrect"
+        echo "  Expected: 30 1 * * * /opt/lab-cron/db-backup.sh"
         ((failures++))
     fi
     
-    # Check ownership
-    if [ -d /var/log/journal ]; then
-        local owner=$(stat -c '%U' /var/log/journal)
-        if [ "$owner" != "root" ]; then
-            echo ""
-            print_color "$YELLOW" "⚠ Directory owner is $owner (expected root)"
-        fi
-    fi
-    
-    # Generate a test entry and see if it appears in persistent storage
-    logger "Lab 17A validation test entry - $(date)"
-    sleep 1
-    
-    if journalctl --since "10 seconds ago" | grep -q "Lab 17A validation test"; then
-        if ls /var/log/journal/*/system.journal >/dev/null 2>&1; then
-            print_color "$GREEN" "  ✓ New entries are being written to persistent storage"
-        fi
+    # Check for health check every 6 hours
+    if echo "$crontab_content" | grep -qE "0 \*/6 \* \* \*.*health-check.sh"; then
+        # Found the job
+        :
+    else
+        echo ""
+        print_color "$RED" "✗ Health check job not found or incorrect"
+        echo "  Expected: 0 */6 * * * /opt/lab-cron/health-check.sh"
+        ((failures++))
     fi
     
     if [ $failures -gt 0 ]; then
@@ -599,329 +527,206 @@ solution_step_2() {
 
 SOLUTION:
 ─────────
+Step 1: Edit root's crontab
+────────────────────────────
+crontab -e
 
-Step 1: Check current storage location
-───────────────────────────────────────
-Verify journal is currently volatile:
-  ls /run/log/journal/
+This opens the default editor (usually vi).
 
-You should see a directory with machine ID.
+Step 2: Add the cron entries
+─────────────────────────────
+Add these lines:
 
-Check for persistent storage:
-  ls /var/log/journal/
+# Database backup - daily at 1:30 AM
+30 1 * * * /opt/lab-cron/db-backup.sh
 
-Should fail with "No such file or directory".
+# System health check - every 6 hours
+0 */6 * * * /opt/lab-cron/health-check.sh
 
-Step 2: Create persistent journal directory
-────────────────────────────────────────────
-Create the directory:
-  sudo mkdir /var/log/journal
+Step 3: Save and exit
+─────────────────────
+In vi: Press ESC, then :wq
 
-Step 3: Set correct permissions
-────────────────────────────────
-Method 1 - Using systemd-tmpfiles (recommended):
-  sudo systemd-tmpfiles --create --prefix /var/log/journal
+Step 4: Verify the crontab
+──────────────────────────
+crontab -l
 
-This automatically sets correct ownership and permissions.
+Should show your two entries.
 
-Method 2 - Manual permissions:
-  sudo chown root:systemd-journal /var/log/journal
-  sudo chmod 2755 /var/log/journal
+Step 5: Check cron logs
+───────────────────────
+tail -f /var/log/cron
 
-The 2755 includes setgid bit (2) so new files inherit group.
+Wait and watch for cron execution messages.
 
-Verify:
-  ls -ld /var/log/journal
+Understanding the entries:
 
-Should show:
-  drwxr-sr-x. 2 root systemd-journal 4096 Feb 08 10:30 /var/log/journal
-
-Step 4: Restart systemd-journald
-─────────────────────────────────
-Restart the service:
-  sudo systemctl restart systemd-journald
-
-Step 5: CRITICAL - Flush the journal
-─────────────────────────────────────
-Force journal to write to persistent storage:
-  sudo journalctl --flush
-
-This is the key step most people miss!
-
-What --flush does:
-  - Tells journald to write volatile journal to persistent
-  - Moves logs from /run/log/journal to /var/log/journal
-  - Signals journald to start using persistent storage
-
-Without this step:
-  - Journal files won't appear in /var/log/journal
-  - Journald continues using /run even though /var exists
-  - Persistence won't work
-
-Step 6: Verify persistent storage
-──────────────────────────────────
-Check for journal files:
-  ls -lh /var/log/journal/
-
-Should show a machine ID directory.
-
-Inside that directory:
-  ls -lh /var/log/journal/*/
-
-Should show:
-  system.journal      - Current journal file
-  user-1000.journal   - User journals (if any)
-
-Verify new entries go to persistent storage:
-  logger "Test persistent journal entry"
+Entry 1: Daily backup at 1:30 AM
+  30 1 * * * /opt/lab-cron/db-backup.sh
   
-Check it's there:
-  journalctl -n 5
-
-The entry should be visible.
-
-Check file was updated:
-  ls -lh /var/log/journal/*/system.journal
-
-Timestamp should be recent.
-
-Understanding what happened:
-
-Before:
-  Logs: /run/log/journal/MACHINE-ID/system.journal (RAM)
-  Status: Volatile
-
-After:
-  Logs: /var/log/journal/MACHINE-ID/system.journal (Disk)
-  Status: Persistent
+  30    - Minute: 30
+  1     - Hour: 1 (1:00 AM)
+  *     - Day: every day
+  *     - Month: every month
+  *     - Weekday: every day of week
   
-Both locations still exist:
-  - /run for early boot messages (before /var mounts)
-  - /var for main persistent storage
+  Runs: 01:30:00 every day
 
-The flush command bridges the gap:
-  - Copies volatile logs to persistent
-  - Switches active logging to persistent
-  - Essential after creating /var/log/journal
-
-Why persistent storage matters:
-
-Historical analysis:
-  journalctl --list-boots
+Entry 2: Health check every 6 hours
+  0 */6 * * * /opt/lab-cron/health-check.sh
   
-Shows all boots (only with persistent journal):
-  -2 abc123... Fri 2026-02-06 08:00:00 EST - Fri 2026-02-06 18:00:00 EST
-  -1 def456... Sat 2026-02-07 09:00:00 EST - Sat 2026-02-07 22:00:00 EST
-   0 ghi789... Sun 2026-02-08 07:00:00 EST - Sun 2026-02-08 10:30:00 EST
+  0     - Minute: 0 (on the hour)
+  */6   - Hour: every 6 hours (0, 6, 12, 18)
+  *     - Day: every day
+  *     - Month: every month
+  *     - Weekday: every day of week
+  
+  Runs: 00:00, 06:00, 12:00, 18:00 daily
 
-View previous boot:
-  journalctl -b -1
+Important crontab commands:
 
-This only works with persistent journal!
+Edit crontab:
+  crontab -e
+  Opens editor for current user
 
-Troubleshooting boot issues:
-  journalctl -b -1 -p err
+List crontab:
+  crontab -l
+  Shows current user's cron jobs
 
-See what errors caused last reboot.
+Remove crontab:
+  crontab -r
+  Deletes all cron jobs for current user
 
-Security auditing:
-  journalctl -u sshd.service --since "2026-02-01"
+Edit another user's crontab (root only):
+  crontab -u username -e
+  crontab -u username -l
+  crontab -u username -r
 
-Review authentication over time.
+Common mistakes to avoid:
 
-Configuration note:
+Mistake 1: Forgetting absolute paths
+  Wrong: 30 1 * * * db-backup.sh
+  Right: 30 1 * * * /opt/lab-cron/db-backup.sh
+  
+  Cron doesn't use your PATH variable
 
-You don't need to edit configuration files!
+Mistake 2: Script not executable
+  chmod +x /opt/lab-cron/db-backup.sh
+  Scripts must have execute permission
 
-The default setting in journald.conf is:
-  Storage=auto
+Mistake 3: Including username in user crontab
+  Wrong: 30 1 * * * root /opt/lab-cron/db-backup.sh
+  Right: 30 1 * * * /opt/lab-cron/db-backup.sh
+  
+  Username is NOT used in user crontabs
 
-This means:
-  - If /var/log/journal exists → use it (persistent)
-  - If /var/log/journal missing → use /run (volatile)
+Mistake 4: Wrong time format
+  Wrong: 1:30 * * * /opt/lab-cron/db-backup.sh
+  Right: 30 1 * * * /opt/lab-cron/db-backup.sh
+  
+  Format is minute-hour, not hour:minute
 
-So creating the directory is enough, but you MUST
-flush the journal to activate it.
+Testing cron jobs:
 
-Alternative: Explicit configuration
+Method 1: Wait for scheduled time
+  crontab -l
+  # Note the schedule
+  tail -f /var/log/cron
+  # Watch for execution
 
-If you want to be explicit, create:
-  sudo mkdir -p /etc/systemd/journald.conf.d/
+Method 2: Test script manually first
+  /opt/lab-cron/db-backup.sh
+  # Verify script works
 
-Create a drop-in file:
-  sudo vi /etc/systemd/journald.conf.d/persistent.conf
+Method 3: Temporary test schedule
+  # Change to run in 2 minutes
+  */2 * * * * /opt/lab-cron/db-backup.sh
+  # Watch /var/log/cron
+  # Change back to real schedule
 
-Add:
-  [Journal]
-  Storage=persistent
+Checking if jobs executed:
+  tail /var/log/cron
+  tail /var/log/lab-cron-backup.log
+  tail /var/log/lab-health-check.log
 
-This ensures journald always uses persistent storage.
+Cron environment:
 
-Restart:
-  sudo systemctl restart systemd-journald
+Limited environment:
+  - Minimal PATH
+  - No interactive shell
+  - No terminal
+  - Limited variables
 
-Then flush:
-  sudo journalctl --flush
-
-Common mistakes:
-
-Mistake 1: Forgetting --flush
-  Created directory but journal still in /run
-  Solution: journalctl --flush
-
-Mistake 2: Wrong permissions
-  Journal can't write to directory
-  Solution: Use systemd-tmpfiles or fix manually
-
-Mistake 3: Not restarting journald
-  Service doesn't notice new directory
-  Solution: systemctl restart systemd-journald
-
-Mistake 4: Expecting immediate persistence
-  Directory created but logs still volatile
-  Solution: Always flush after creating directory
-
-Disk space warning:
-
-Persistent journals use disk space!
-Default limits prevent unbounded growth:
-  - Max 10% of filesystem
-  - Keep 15% filesystem free
-  - Monthly rotation
-
-Monitor usage:
-  journalctl --disk-usage
+Good practices:
+  - Use absolute paths
+  - Set PATH in script if needed
+  - Redirect output: >> /var/log/script.log 2>&1
+  - Test scripts independently first
 
 EOF
 }
 
 hint_step_3() {
-    echo "  Config location: /etc/systemd/journald.conf.d/"
-    echo "  Create drop-in file: mkdir -p then create .conf file"
-    echo "  Key settings: SystemMaxUse, SystemKeepFree, MaxRetentionSec"
-    echo "  Check usage: journalctl --disk-usage"
-    echo "  Read: man journald.conf for all options"
+    echo "  Create: /etc/cron.d/lab-reports"
+    echo "  Format: minute hour day month weekday USER command"
+    echo "  Sunday 11 PM: 0 23 * * 0 root /opt/lab-cron/generate-report.sh"
+    echo "  Must include username (root) in system cron"
 }
 
 # STEP 3
 show_step_3() {
     cat << 'EOF'
-TASK: Configure journal size limits and retention policies
+TASK: Create system-wide cron job in /etc/cron.d/
 
-Learn how to control journal disk usage and retention time.
-
-The challenge:
-  Persistent journals can grow large and fill disk space.
-  You need to configure limits to prevent unbounded growth.
+Create a system cron job for weekly report generation.
 
 Requirements:
-  • Understand where journal configuration goes
-    (Hint: It's NOT editing the service file directly)
-  
-  • Create a configuration drop-in file
-    - Location: /etc/systemd/journald.conf.d/
-    - Create a .conf file with appropriate settings
-  
-  • Configure the following limits:
-    - Maximum total journal size: 1G
-    - Minimum free space to keep: 500M
-    - Maximum retention time: 30 days
-  
-  • Apply the configuration
-  
-  • Check current journal disk usage
-  
-  • Understand how rotation and cleanup work
+  • Create file: /etc/cron.d/lab-reports
+  • Schedule: Every Sunday at 11:00 PM (23:00)
+  • User: root
+  • Command: /opt/lab-cron/generate-report.sh
+  • Use proper system cron format with username
+  • Add comment describing the job
 
-Configuration concepts to learn:
-  • journald uses drop-in configuration files
-  • Settings go in /etc/systemd/journald.conf.d/*.conf
-  • Each setting controls different aspects of storage
-  • Changes require restarting systemd-journald
+System cron format (different from user crontab):
+  minute hour day month weekday USERNAME command
 
-Key settings to understand:
-  SystemMaxUse=       Max total disk space for journal
-  SystemKeepFree=     Min free space to preserve on filesystem  
-  SystemMaxFileSize=  Max size of individual journal file
-  MaxRetentionSec=    Max time to keep journal entries
-  MaxFileSec=         Force rotation after this time
+Key differences:
+  • System cron files include USERNAME field
+  • Located in /etc/cron.d/
+  • Can specify different users for different jobs
+  • Don't use crontab command to edit
 
-Research before starting:
-  man journald.conf (read the entire man page)
-  Look for the [Journal] section format
-  Understand size units (K, M, G)
-  Understand time units (s, m, h, d, month, year)
+Schedule for Sunday at 11 PM:
+  0 23 * * 0 root /opt/lab-cron/generate-report.sh
 
-Default behavior (if not configured):
-  - Uses up to 10% of filesystem size
-  - Keeps at least 15% free
-  - Rotates monthly
-  - No time-based deletion
-
-Your task:
-  Override these defaults with more conservative limits
-  to prevent journal from consuming too much disk space.
-
-After configuration:
-  • Verify settings took effect
-  • Check current journal disk usage
-  • Understand when rotation/cleanup occurs
+Alternative for Sunday:
+  0 23 * * sun root /opt/lab-cron/generate-report.sh
 EOF
 }
 
 validate_step_3() {
     local failures=0
     
-    # Check if configuration directory exists
-    if [ ! -d /etc/systemd/journald.conf.d ]; then
+    # Check if file exists
+    if [ ! -f /etc/cron.d/lab-reports ]; then
         echo ""
-        print_color "$RED" "✗ /etc/systemd/journald.conf.d/ directory not found"
-        echo "  Create this directory for drop-in configuration files"
+        print_color "$RED" "✗ /etc/cron.d/lab-reports not found"
         ((failures++))
         return 1
     fi
     
-    # Check if there's a configuration file
-    if ! ls /etc/systemd/journald.conf.d/*.conf >/dev/null 2>&1; then
+    # Check for correct entry (Sunday at 11 PM with root user)
+    # Accept both "0" and "sun" for Sunday
+    if grep -qE "0 23 \* \* (0|sun) root.*generate-report.sh" /etc/cron.d/lab-reports; then
+        # Found valid entry
+        :
+    else
         echo ""
-        print_color "$RED" "✗ No .conf files found in /etc/systemd/journald.conf.d/"
-        echo "  Create a drop-in configuration file (e.g., size-limits.conf)"
-        ((failures++))
-        return 1
-    fi
-    
-    # Check for required settings in any .conf file
-    local has_maxuse=false
-    local has_keepfree=false
-    local has_retention=false
-    
-    for conf in /etc/systemd/journald.conf.d/*.conf; do
-        if grep -q "^SystemMaxUse=" "$conf" 2>/dev/null; then
-            has_maxuse=true
-        fi
-        if grep -q "^SystemKeepFree=" "$conf" 2>/dev/null; then
-            has_keepfree=true
-        fi
-        if grep -q "^MaxRetentionSec=" "$conf" 2>/dev/null; then
-            has_retention=true
-        fi
-    done
-    
-    if ! $has_maxuse; then
-        echo ""
-        print_color "$RED" "✗ SystemMaxUse not configured"
-        ((failures++))
-    fi
-    
-    if ! $has_keepfree; then
-        echo ""
-        print_color "$RED" "✗ SystemKeepFree not configured"
-        ((failures++))
-    fi
-    
-    if ! $has_retention; then
-        echo ""
-        print_color "$RED" "✗ MaxRetentionSec not configured"
+        print_color "$RED" "✗ Cron job not found or incorrect in /etc/cron.d/lab-reports"
+        echo "  Expected: 0 23 * * 0 root /opt/lab-cron/generate-report.sh"
+        echo "  Your file contains:"
+        cat /etc/cron.d/lab-reports
         ((failures++))
     fi
     
@@ -937,352 +742,260 @@ solution_step_3() {
 
 SOLUTION:
 ─────────
-
-Understanding journal configuration:
-
-Journal configuration uses drop-in files, similar to other
-systemd components.
-
-DO NOT edit /usr/lib/systemd/journald.conf
-DO NOT edit the service file
-
-Instead, create drop-in files in:
-  /etc/systemd/journald.conf.d/
-
-Step 1: Create configuration directory
-───────────────────────────────────────
-Create the drop-in directory:
-  sudo mkdir -p /etc/systemd/journald.conf.d/
-
-Step 2: Create configuration file
-──────────────────────────────────
-Create a new drop-in file:
-  sudo vi /etc/systemd/journald.conf.d/size-limits.conf
-
-Add the following content:
-  [Journal]
-  SystemMaxUse=1G
-  SystemKeepFree=500M
-  MaxRetentionSec=30d
-
-Save and exit.
-
-Step 3: Verify configuration syntax
+Step 1: Create the system cron file
 ────────────────────────────────────
-Check your file:
-  cat /etc/systemd/journald.conf.d/size-limits.conf
+sudo vi /etc/cron.d/lab-reports
 
-Ensure:
-  - [Journal] section header is present
-  - No spaces around = signs
-  - Proper units (G for gigabytes, M for megabytes, d for days)
+Step 2: Add the cron entry
+───────────────────────────
+Add this content:
 
-Step 4: Restart systemd-journald
-─────────────────────────────────
-Apply the configuration:
-  sudo systemctl restart systemd-journald
+# Weekly report generation - Sundays at 11 PM
+0 23 * * 0 root /opt/lab-cron/generate-report.sh
 
-Check service started successfully:
-  systemctl status systemd-journald
+Step 3: Save the file
+─────────────────────
+ESC, then :wq
 
-Step 5: Verify settings took effect
-────────────────────────────────────
-Check current journal disk usage:
-  journalctl --disk-usage
+Step 4: Verify permissions
+───────────────────────────
+ls -l /etc/cron.d/lab-reports
 
-Example output:
-  Archived and active journals take up 256.0M in the file system.
+Should be: -rw-r--r-- (644 permissions are fine)
 
-This should be under your 1G limit.
+Step 5: Check cron picks it up
+───────────────────────────────
+No daemon reload needed - cron reads /etc/cron.d/ automatically
 
-Understanding the settings:
+Check logs:
+  tail -f /var/log/cron
 
-SystemMaxUse=1G:
-  Maximum total space journal can consume
-  Once this limit is reached, oldest files are deleted
+Understanding system cron format:
+
+Complete format:
+  minute hour day month weekday USERNAME command
+
+Example breakdown:
+  0 23 * * 0 root /opt/lab-cron/generate-report.sh
   
-  Example on 100GB /var filesystem:
-    Default: 10% = 10GB
-    Our setting: 1GB (much more conservative)
+  0       - Minute: 0 (on the hour)
+  23      - Hour: 23 (11 PM)
+  *       - Day: every day
+  *       - Month: every month
+  0       - Weekday: Sunday (0 = Sunday, can also use "sun")
+  root    - Run as root user
+  command - Script to execute
 
-SystemKeepFree=500M:
-  Minimum free space to maintain on filesystem
-  Journal stops growing when free space drops to this
+Key differences: User vs System cron
+
+User crontab (crontab -e):
+  ┌──────────────────────────────────────────┐
+  │ 30 1 * * * /opt/lab-cron/db-backup.sh   │
+  │ └┬┘ └──────────────┬─────────────────┘  │
+  │  │                  └─ Command           │
+  │  └─ Time (5 fields)                      │
+  │                                           │
+  │ NO USERNAME FIELD                        │
+  │ Runs as crontab owner                    │
+  └──────────────────────────────────────────┘
+
+System cron (/etc/cron.d/):
+  ┌──────────────────────────────────────────────────┐
+  │ 0 23 * * 0 root /opt/lab-cron/generate-report.sh │
+  │ └┬┘         └┬┘  └──────────┬──────────────────┘│
+  │  │           │               └─ Command          │
+  │  │           └─ Username (REQUIRED)              │
+  │  └─ Time (5 fields)                              │
+  │                                                   │
+  │ MUST INCLUDE USERNAME                            │
+  │ Can run as any user                              │
+  └──────────────────────────────────────────────────┘
+
+Day of week values:
+
+Numeric:
+  0 or 7  = Sunday
+  1       = Monday
+  2       = Tuesday
+  3       = Wednesday
+  4       = Thursday
+  5       = Friday
+  6       = Saturday
+
+Name-based:
+  sun, mon, tue, wed, thu, fri, sat
+
+Both are valid:
+  0 23 * * 0 root command          # Numeric Sunday
+  0 23 * * sun root command        # Name Sunday
+
+Why use /etc/cron.d/:
+
+Advantages:
+  1. Package management friendly
+     - RPM packages can drop in cron jobs
+     - Won't conflict with user crontabs
   
-  Example scenario:
-    Filesystem has 600M free
-    Journal tries to write 200M
-    Would leave only 400M free (< 500M limit)
-    Journal rotation triggered instead
-
-MaxRetentionSec=30d:
-  Maximum time to keep journal entries
-  Entries older than 30 days are deleted
+  2. Multiple users
+     - Different jobs can run as different users
+     - All in one file or separate files
   
-  Time units:
-    s = seconds
-    m = minutes
-    h = hours
-    d = days
-    month = months
-    year = years
-
-The most restrictive limit wins:
-
-If you set:
-  SystemMaxUse=1G
-  MaxRetentionSec=30d
-
-Journal is limited by whichever triggers first:
-  - Size reaches 1G → cleanup triggered
-  - Entries reach 30 days old → cleanup triggered
-
-Additional useful settings:
-
-SystemMaxFileSize=100M:
-  Maximum size of individual journal file
-  When reached, rotation occurs
-  Default: 1/8 of SystemMaxUse
+  3. Organized
+     - Separate file per application
+     - Easy to enable/disable (rename file)
   
-  Example:
-    SystemMaxFileSize=100M
+  4. Version control
+     - Files can be tracked in git
+     - Easy to backup/restore
 
-SystemMaxFiles=20:
-  Maximum number of archived journal files
-  Oldest deleted when limit exceeded
-  Default: 100
+When to use each:
+
+Use user crontab (crontab -e):
+  - Personal jobs for a specific user
+  - Simple single-user tasks
+  - Quick temporary jobs
+
+Use system cron (/etc/cron.d/):
+  - Application or service jobs
+  - Jobs that need specific users
+  - Jobs managed by packages
+  - Production deployments
+
+Example system cron file:
+
+/etc/cron.d/application-jobs:
+  # Backup job - runs as appuser
+  0 2 * * * appuser /opt/app/backup.sh
   
-  Example:
-    SystemMaxFiles=10
-
-MaxFileSec=1week:
-  Force rotation after this time period
-  Even if file size limit not reached
-  Default: 1month
+  # Cleanup job - runs as root
+  0 3 * * * root /opt/app/cleanup.sh
   
-  Example:
-    MaxFileSec=1week
+  # Report job - runs as reports user
+  0 23 * * 0 reports /opt/app/weekly-report.sh
 
-RuntimeMaxUse=100M:
-  Maximum size for volatile journal in /run
-  Separate from SystemMaxUse
-  
-  Example:
-    RuntimeMaxUse=100M
+File naming conventions:
 
-Creating a comprehensive configuration:
+Good names:
+  - lab-reports
+  - myapp-backup
+  - database-maintenance
 
-Example /etc/systemd/journald.conf.d/limits.conf:
+Avoid:
+  - Names with spaces
+  - Names with special characters
+  - .sh extension (not needed)
 
-  [Journal]
-  # Storage limits
-  SystemMaxUse=1G
-  SystemKeepFree=500M
-  SystemMaxFileSize=100M
-  SystemMaxFiles=20
-  
-  # Time-based retention
-  MaxRetentionSec=30d
-  MaxFileSec=1week
-  
-  # Volatile journal limits (in /run)
-  RuntimeMaxUse=100M
-  RuntimeKeepFree=200M
+Permissions:
 
-Understanding rotation:
+/etc/cron.d/ files should be:
+  - Owned by root:root
+  - Permission 644 (-rw-r--r--)
+  - Not executable (don't need +x)
 
-Rotation triggers:
-  1. File size limit reached (SystemMaxFileSize)
-  2. Time limit reached (MaxFileSec)
-  3. Manual rotation requested
+Check:
+  ls -l /etc/cron.d/lab-reports
 
-When rotation occurs:
-  - Current journal renamed with timestamp
-  - New journal file created
-  - Old files deleted if limits exceeded
+Troubleshooting:
 
-Manual rotation:
-  sudo journalctl --rotate
+If job doesn't run:
 
-Manual cleanup:
+1. Check file exists:
+   ls -l /etc/cron.d/lab-reports
 
-Vacuum by size:
-  sudo journalctl --vacuum-size=500M
+2. Check format:
+   cat /etc/cron.d/lab-reports
+   # Must have username field
 
-Reduce journal to 500M total.
+3. Check script:
+   ls -l /opt/lab-cron/generate-report.sh
+   # Must be executable
 
-Vacuum by time:
-  sudo journalctl --vacuum-time=7d
+4. Check logs:
+   tail /var/log/cron
+   # Look for errors
 
-Keep only last 7 days.
-
-Vacuum by file count:
-  sudo journalctl --vacuum-files=5
-
-Keep only 5 most recent archive files.
-
-Checking configuration:
-
-View active settings:
-  systemd-analyze cat-config systemd/journald.conf
-
-Shows merged configuration from all sources.
-
-View current journal status:
-  journalctl --header
-
-Shows journal file metadata.
-
-Verify journal integrity:
-  journalctl --verify
-
-Checks for corruption.
-
-Best practices for different scenarios:
-
-Desktop/laptop (limited disk):
-  SystemMaxUse=500M
-  MaxRetentionSec=7d
-
-Development server (frequent changes):
-  SystemMaxUse=2G
-  MaxRetentionSec=14d
-
-Production server (audit requirements):
-  SystemMaxUse=10G
-  MaxRetentionSec=90d
-
-Minimal system (embedded):
-  SystemMaxUse=100M
-  MaxRetentionSec=3d
-
-Common mistakes:
-
-Mistake 1: Spaces around equals
-  Wrong: SystemMaxUse = 1G
-  Right: SystemMaxUse=1G
-
-Mistake 2: Missing [Journal] section
-  Configuration ignored without section header
-
-Mistake 3: Wrong file location
-  Putting config in wrong directory
-  Must be in /etc/systemd/journald.conf.d/
-
-Mistake 4: Not restarting journald
-  Configuration doesn't take effect
-  Always restart after changes
-
-Mistake 5: Conflicting settings
-  Multiple .conf files with different values
-  Last one read wins (alphabetical order)
-
-Monitoring journal size:
-
-Regular monitoring:
-  journalctl --disk-usage
-
-Set up monitoring alert if size exceeds threshold.
-
-Automated cleanup:
-  Journal handles this automatically based on
-  configured limits. No cron job needed.
+5. Test script manually:
+   /opt/lab-cron/generate-report.sh
 
 EOF
 }
 
 hint_step_4() {
-    echo "  Check broken service: systemctl status lab-broken.service"
-    echo "  View its logs: journalctl -u lab-broken.service"
-    echo "  Verbose output: journalctl -o verbose -u lab-broken.service"
-    echo "  Find auth failures: journalctl -u sshd.service | grep -i fail"
-    echo "  Correlate events: Use multiple -u flags"
+    echo "  Create: /etc/cron.allow"
+    echo "  Add: cronuser1 and cronuser2 (one per line)"
+    echo "  Do NOT add cronuser3 (denied by omission)"
+    echo "  Note: Root can always use 'crontab -u USER' regardless"
 }
 
 # STEP 4
 show_step_4() {
     cat << 'EOF'
-TASK: Use journal for practical troubleshooting scenarios
+TASK: Configure cron access control with cron.allow
 
-Apply your journal skills to real troubleshooting situations.
+Control which users can create cron jobs using cron.allow.
 
-Scenario 1: Service Failure Investigation
-  A service called "lab-broken.service" was created during setup.
-  It failed to start. Use the journal to:
-  
-  • Determine WHY the service failed
-  • Find the exact error message
-  • Identify what command it tried to execute
-  • Determine when the failure occurred
-  
-  Research strategy:
-    - Check service status first
-    - View journal entries for that specific unit
-    - Look at priority levels (errors)
-    - Use verbose output to see all fields
+Requirements:
+  • Create file: /etc/cron.allow
+  • Add users: cronuser1 and cronuser2 (one per line)
+  • Do NOT add cronuser3 (denied by omission)
+  • Verify the file is created correctly
 
-Scenario 2: Authentication Analysis
-  Examine SSH authentication events:
-  
-  • Find all SSH-related log entries
-  • Identify any failed authentication attempts
-  • Determine which users attempted to connect
-  • Find successful login events
-  
-  Techniques to use:
-    - Filter by sshd service unit
-    - Look for "Failed" or "Accepted" keywords
-    - Use time filtering if needed
-    - Combine with grep for specific patterns
+Access control rules:
+  • If cron.allow exists, only users in it can use cron
+  • If cron.allow exists, cron.deny is ignored
+  • Root can always use cron (and manage others' crontabs)
 
-Scenario 3: Event Correlation
-  Correlate events across multiple services:
+Important understanding:
+  Root can ALWAYS run "crontab -u USERNAME" commands regardless of
+  cron.allow/cron.deny. The access control only affects whether the
+  user themselves can run crontab commands.
   
-  • View logs from multiple units simultaneously
-  • Find events that happened at the same time
-  • Understand sequence of events during system startup
-  
-  Skills to practice:
-    - Multiple -u flags in one command
-    - Time-based filtering
-    - Following logs in real-time
+  What we're testing: Whether cronuser1 and cronuser2 are allowed
+  while cronuser3 is denied (by not being in the file).
 
-Scenario 4: Structured Field Filtering
-  Use journal's structured fields for precise filtering:
-  
-  • View all available field names
-  • Filter by specific PID
-  • Filter by specific executable
-  • Filter by specific message ID
-  
-  Advanced filtering:
-    - Use -N to list all field names
-    - Use FIELD=VALUE syntax for exact matches
-    - Use -o verbose to see all fields
-    - Combine with other filters
-
-Questions to answer by end of this step:
-  1. Why did lab-broken.service fail?
-  2. What command was it trying to run?
-  3. Have there been any SSH authentication failures?
-  4. What services started during last boot?
-  5. Can you find all entries from a specific PID?
-
-Tools at your disposal:
-  • journalctl with various filters
-  • grep for text searching within journal output
-  • Verbose output to see structured data
-  • Time filtering to narrow results
-  • Priority filtering to focus on errors
-
-This step tests your ability to use journald for
-REAL troubleshooting, not just viewing logs.
+The test users (cronuser1, cronuser2, cronuser3) were created
+during lab setup.
 EOF
 }
 
 validate_step_4() {
-    # Practical/exploratory step, always pass
-    # The goal is learning to troubleshoot
+    local failures=0
+    
+    # Check if cron.allow exists
+    if [ ! -f /etc/cron.allow ]; then
+        echo ""
+        print_color "$RED" "✗ /etc/cron.allow not found"
+        echo "  Create this file to control cron access"
+        ((failures++))
+        return 1
+    fi
+    
+    # Check if cronuser1 is in cron.allow
+    if ! grep -q "^cronuser1$" /etc/cron.allow; then
+        echo ""
+        print_color "$RED" "✗ cronuser1 not found in /etc/cron.allow"
+        ((failures++))
+    fi
+    
+    # Check if cronuser2 is in cron.allow
+    if ! grep -q "^cronuser2$" /etc/cron.allow; then
+        echo ""
+        print_color "$RED" "✗ cronuser2 not found in /etc/cron.allow"
+        ((failures++))
+    fi
+    
+    # Check that cronuser3 is NOT in cron.allow (should be denied by omission)
+    if grep -q "^cronuser3$" /etc/cron.allow; then
+        echo ""
+        print_color "$RED" "✗ cronuser3 should NOT be in /etc/cron.allow"
+        echo "  cronuser3 should be denied by omission (not in the file)"
+        ((failures++))
+    fi
+    
+    if [ $failures -gt 0 ]; then
+        return 1
+    fi
+    
     return 0
 }
 
@@ -1291,269 +1004,247 @@ solution_step_4() {
 
 SOLUTION:
 ─────────
+Step 1: Create cron.allow file
+───────────────────────────────
+sudo vi /etc/cron.allow
 
-Scenario 1: Service Failure Investigation
-───────────────────────────────────────────
+Step 2: Add allowed users
+──────────────────────────
+Add these lines (one username per line):
 
-Check service status:
-  systemctl status lab-broken.service
+cronuser1
+cronuser2
 
-Shows:
-  ● lab-broken.service - Lab Broken Service for Testing
-       Loaded: loaded
-       Active: failed
-       
-View service logs:
-  journalctl -u lab-broken.service
+Do NOT add cronuser3 - it should be denied by omission.
 
-Look for error messages.
+Step 3: Save the file
+─────────────────────
+ESC, then :wq
 
-View with error priority only:
-  journalctl -u lab-broken.service -p err
+Step 4: Verify the file
+───────────────────────
+cat /etc/cron.allow
 
-Find the specific failure:
-  journalctl -u lab-broken.service -n 20
+Should show:
+  cronuser1
+  cronuser2
 
-Shows last 20 entries for this service.
+Check permissions:
+  ls -l /etc/cron.allow
 
-Use verbose output to see all fields:
-  journalctl -u lab-broken.service -o verbose
+Should be: -rw-r--r-- (644) owned by root
 
-Shows structured data:
-  _SYSTEMD_UNIT=lab-broken.service
-  MESSAGE=Failed to start Lab Broken Service
-  _COMM=systemd
+Understanding how this works:
+
+When cron.allow exists:
+  • ONLY users listed in /etc/cron.allow can use cron
+  • All other users are denied (by omission)
+  • /etc/cron.deny is completely ignored
+  • Root can always use cron
+
+In this configuration:
+  ✓ cronuser1 - Listed in cron.allow (ALLOWED)
+  ✓ cronuser2 - Listed in cron.allow (ALLOWED)
+  ✗ cronuser3 - NOT in cron.allow (DENIED by omission)
+  ✓ root      - Always allowed (special exception)
+
+Important distinction - Root's special privilege:
+
+Root can always run these commands:
+  crontab -u cronuser1 -e    ✓ Works (root can manage any crontab)
+  crontab -u cronuser2 -e    ✓ Works (root can manage any crontab)
+  crontab -u cronuser3 -e    ✓ Works (root can manage any crontab)
+
+But if cronuser3 tries directly:
+  su - cronuser3
+  crontab -e                 ✗ Denied by cron.allow
+
+This is correct behavior - root has administrative privilege
+to manage crontabs, but cronuser3 cannot use cron themselves.
+
+Understanding cron access control:
+
+Access control files:
+  /etc/cron.allow   - Whitelist of allowed users
+  /etc/cron.deny    - Blacklist of denied users
+
+Logic flow:
+  ┌─────────────────────────────────────┐
+  │ Does /etc/cron.allow exist?         │
+  └──────────┬─────────────┬────────────┘
+             Yes           No
+             │             │
+             ▼             ▼
+  ┌──────────────────┐  ┌──────────────────┐
+  │ Is user in       │  │ Does cron.deny   │
+  │ cron.allow?      │  │ exist?           │
+  └──┬──────────┬────┘  └──┬──────────┬────┘
+    Yes        No          Yes        No
+     │          │           │          │
+     ▼          ▼           ▼          ▼
+  Allow      Deny    ┌─────────┐   Allow
+                     │ Is user │   all
+                     │ in deny?│
+                     └──┬───┬──┘
+                       Yes No
+                        │   │
+                        ▼   ▼
+                      Deny Allow
+
+Rule priority:
+  1. If cron.allow exists:
+     - ONLY users in cron.allow can use cron
+     - cron.deny is completely ignored
+     - Empty cron.allow = nobody can use cron (except root)
   
-The error will show:
-  "Failed to execute /usr/bin/nonexistent-command: No such file or directory"
+  2. If cron.allow doesn't exist but cron.deny exists:
+     - Users in cron.deny cannot use cron
+     - All other users can use cron
+     - Empty cron.deny = everyone can use cron
+  
+  3. If neither file exists:
+     - All users can use cron
+
+Root exception:
+  - Root can ALWAYS use cron
+  - Root can ALWAYS manage other users' crontabs
+  - Even if not in cron.allow
+  - Cannot be blocked by cron.deny
+
+Example scenarios:
+
+Scenario 1: Whitelist approach (what we're using)
+  Create /etc/cron.allow with:
+    user1
+    user2
+    appuser
+  
+  Result:
+    - Only user1, user2, appuser can use cron
+    - All other users denied by omission
+    - Root can still manage all crontabs
+
+Scenario 2: Blacklist approach
+  Create /etc/cron.deny with:
+    baduser
+    testuser
+  
+  Remove /etc/cron.allow if it exists
+  
+  Result:
+    - baduser and testuser cannot use cron
+    - All other users can use cron
+
+Scenario 3: Deny everyone except root
+  Create empty /etc/cron.allow
+  (No usernames in file)
+  
+  Result:
+    - Only root can use cron
+    - All regular users denied
+
+Best practices:
+
+Security approach:
+  - Use cron.allow (whitelist) for better control
+  - Only list users who need scheduled jobs
+  - Review allowed users periodically
+  - Don't mix cron.allow and cron.deny (cron.allow wins)
+
+File format:
+  - One username per line
+  - No comments allowed
+  - No extra whitespace
+  - Just the username
+
+Example /etc/cron.allow:
+  appuser
+  backup
+  monitoring
+  admin
+
+Common mistakes:
+
+Mistake 1: Putting comments in file
+  Wrong:
+    # Application user
+    appuser
+  
+  Right:
+    appuser
+
+Mistake 2: Wrong permissions
+  File should be:
+    -rw-r--r-- (644)
+    Owned by root:root
+
+Mistake 3: Expecting cron.deny to work when cron.allow exists
+  If /etc/cron.allow exists:
+    - cron.deny is COMPLETELY IGNORED
+    - Remove cron.allow to use cron.deny
+
+Mistake 4: Adding root to cron.allow
+  Not necessary - root always has cron access
+  Doesn't hurt, but it's redundant
+
+Why validation checks file content only:
+
+The validation checks:
+  1. /etc/cron.allow exists
+  2. cronuser1 is in the file
+  3. cronuser2 is in the file
+  4. cronuser3 is NOT in the file
+
+This is correct because:
+  - The file determines who is allowed
+  - Having cronuser1 and cronuser2 in the file means they're allowed
+  - NOT having cronuser3 in the file means they're denied
+  - Root can always manage crontabs (separate privilege)
 
-This tells you:
-  - Service tried to run /usr/bin/nonexistent-command
-  - The command doesn't exist
-  - Service failed because executable is missing
+Troubleshooting:
 
-Root cause analysis:
-  cat /etc/systemd/system/lab-broken.service
+If allowed user can't access cron:
 
-Shows ExecStart points to nonexistent command.
+1. Check file exists:
+   ls -l /etc/cron.allow
 
-How to fix (for reference):
-  1. Update ExecStart to valid command
-  2. systemctl daemon-reload
-  3. systemctl restart lab-broken.service
+2. Check username is in file:
+   grep username /etc/cron.allow
 
-Scenario 2: Authentication Analysis
-────────────────────────────────────
+3. Check spelling:
+   # Must match exactly
+   getent passwd username
 
-View all SSH logs:
-  journalctl -u sshd.service
+4. Check file permissions:
+   ls -l /etc/cron.allow
+   # Should be readable
 
-Find failed authentication attempts:
-  journalctl -u sshd.service | grep -i failed
+5. Check for extra whitespace:
+   cat -A /etc/cron.allow
+   # Should show clean lines
 
-Or:
-  journalctl -u sshd.service | grep -i "Failed password"
+If denied user can access cron:
 
-Find successful logins:
-  journalctl -u sshd.service | grep -i accepted
+1. Check cron.allow doesn't include them:
+   grep username /etc/cron.allow
 
-Show recent SSH activity:
-  journalctl -u sshd.service --since "1 hour ago"
+2. Check if cron.allow exists:
+   ls -l /etc/cron.allow
 
-Find specific user activity:
-  journalctl -u sshd.service | grep "user root"
+3. If using cron.deny:
+   # Remove cron.allow if it exists
+   # Only then will cron.deny work
 
-Warning and error level SSH events:
-  journalctl -u sshd.service -p warning
+Viewing access control status:
 
-Real-time SSH monitoring:
-  journalctl -u sshd.service -f
+Check which method in use:
+  ls -l /etc/cron.allow /etc/cron.deny
 
-This follows new entries as they happen.
-
-Find authentication failures for security review:
-  journalctl -u sshd.service | grep -E "(Failed|Invalid|Illegal)"
-
-Scenario 3: Event Correlation
-──────────────────────────────
-
-View multiple services simultaneously:
-  journalctl -u sshd.service -u crond.service
-
-Shows interleaved logs from both services,
-sorted by timestamp.
-
-View multiple services from boot:
-  journalctl -b -u sshd.service -u systemd-journald.service
-
-Find what services started during boot:
-  journalctl -b | grep -i "Started"
-
-Or more specifically:
-  journalctl -b -p info | grep "Started"
-
-Find services that failed during boot:
-  journalctl -b -p err
-
-Correlate events by time:
-  journalctl --since "10:00:00" --until "10:05:00"
-
-Shows all events in 5-minute window.
-
-Find what happened around a specific event:
-  journalctl --since "10:30:00" --until "10:30:10"
-
-Narrow 10-second window around an incident.
-
-Scenario 4: Structured Field Filtering
-───────────────────────────────────────
-
-List all field names in journal:
-  journalctl -N
-
-Shows fields like:
-  _PID
-  _UID
-  _SYSTEMD_UNIT
-  MESSAGE
-  PRIORITY
-  _HOSTNAME
-  _COMM
-
-Filter by specific field:
-  journalctl _SYSTEMD_UNIT=sshd.service
-
-This is equivalent to:
-  journalctl -u sshd.service
-
-Filter by specific PID:
-  journalctl _PID=1234
-
-Shows only entries from process 1234.
-
-Filter by executable name:
-  journalctl _COMM=sshd
-
-Shows entries from sshd process.
-
-Filter by user ID:
-  journalctl _UID=1000
-
-Shows entries from user with UID 1000.
-
-Combine multiple field filters:
-  journalctl _SYSTEMD_UNIT=sshd.service PRIORITY=3
-
-Shows only error-level entries from sshd.
-
-View all fields for an entry:
-  journalctl -o verbose -n 1
-
-Shows one entry with all fields expanded.
-
-Find entries with specific message ID:
-  journalctl MESSAGE_ID=xyz...
-
-Useful for finding specific event types.
-
-Advanced filtering examples:
-
-All errors from specific user:
-  journalctl _UID=1000 PRIORITY=3
-
-All kernel messages:
-  journalctl _TRANSPORT=kernel
-
-All messages from specific boot:
-  journalctl _BOOT_ID=abc123...
-
-Messages from specific hostname:
-  journalctl _HOSTNAME=server01
-
-Practical troubleshooting workflow:
-
-Step 1: Identify the problem scope
-  - Which service?
-  - When did it occur?
-  - How severe is it?
-
-Step 2: Narrow down with filters
-  journalctl -u service.service -p err --since "1 hour ago"
-
-Step 3: Get detailed view
-  journalctl -u service.service -o verbose
-
-Step 4: Correlate with other events
-  journalctl --since "TIME" --until "TIME"
-
-Step 5: Extract specific information
-  journalctl _PID=1234 _COMM=program
-
-Tips for effective troubleshooting:
-
-1. Start broad, then narrow:
-   journalctl -b              # All boot logs
-   journalctl -b -p err       # Just errors
-   journalctl -b -p err -u sshd.service  # SSH errors
-
-2. Use time windows:
-   --since and --until to focus on incident timeframe
-
-3. Follow logs during reproduction:
-   journalctl -f -u service.service
-   Then trigger the issue
-
-4. Check before and after:
-   Look at logs immediately before the problem
-   to find root cause
-
-5. Combine tools:
-   journalctl | grep | awk | sort | uniq -c
-   Use Unix tools to analyze journal output
-
-Common troubleshooting patterns:
-
-Service won't start:
-  systemctl status service.service
-  journalctl -u service.service -xe
-
-System slow/unresponsive:
-  journalctl -b -p warning
-
-Authentication issues:
-  journalctl -u sshd.service | grep -i fail
-
-Network problems:
-  journalctl -u NetworkManager.service
-
-Boot problems:
-  journalctl -b -p err
-
-Recurring issues:
-  journalctl --since "7 days ago" | grep "ERROR_PATTERN"
-
-Real-world example:
-
-Problem: Web server won't start
-
-Investigation:
-  systemctl status httpd.service
-  # Shows "failed"
-
-  journalctl -u httpd.service -xe
-  # Shows "Address already in use"
-
-  journalctl | grep ":80"
-  # Find what's using port 80
-
-  journalctl _PID=1234
-  # Check logs from that process
-
-Resolution:
-  # Stop conflicting service or change port
-
-This demonstrates using journal for complete
-troubleshooting workflow.
+Results interpretation:
+  Only cron.allow exists → Whitelist mode (most secure)
+  Only cron.deny exists  → Blacklist mode
+  Neither exists         → All users allowed
+  Both exist             → Only cron.allow matters (deny ignored)
 
 EOF
 }
@@ -1563,89 +1254,111 @@ EOF
 #############################################################################
 validate() {
     local score=0
-    local total=4
+    local total=7
     
-    echo "Checking your journald configuration..."
+    echo "Checking your cron configuration..."
     echo ""
     
-    # CHECK 1: systemd-journald is active
-    print_color "$CYAN" "[1/$total] Checking systemd-journald service..."
-    if systemctl is-active systemd-journald >/dev/null 2>&1; then
-        print_color "$GREEN" "  ✓ systemd-journald is running"
+    # CHECK 1: crond service is running
+    print_color "$CYAN" "[1/$total] Checking crond service..."
+    if systemctl is-active crond >/dev/null 2>&1; then
+        print_color "$GREEN" "  ✓ crond service is running"
         ((score++))
     else
-        print_color "$RED" "  ✗ systemd-journald is not running"
+        print_color "$RED" "  ✗ crond service is not running"
+        print_color "$YELLOW" "  Fix: systemctl start crond"
     fi
     echo ""
     
-    # CHECK 2: Persistent journal directory exists and is in use
-    print_color "$CYAN" "[2/$total] Checking persistent journal storage..."
-    if [ -d /var/log/journal ]; then
-        if ls /var/log/journal/*/system.journal >/dev/null 2>&1; then
-            print_color "$GREEN" "  ✓ Persistent journal configured and actively in use"
+    # CHECK 2: Root has crontab with backup job
+    print_color "$CYAN" "[2/$total] Checking root crontab - backup job..."
+    if crontab -u root -l 2>/dev/null | grep -q "30 1 \* \* \*.*db-backup.sh"; then
+        print_color "$GREEN" "  ✓ Daily backup job configured (1:30 AM)"
+        ((score++))
+    else
+        print_color "$RED" "  ✗ Backup job not found or incorrect"
+        print_color "$YELLOW" "  Expected: 30 1 * * * /opt/lab-cron/db-backup.sh"
+    fi
+    echo ""
+    
+    # CHECK 3: Root has crontab with health check job
+    print_color "$CYAN" "[3/$total] Checking root crontab - health check job..."
+    if crontab -u root -l 2>/dev/null | grep -qE "0 \*/6 \* \* \*.*health-check.sh"; then
+        print_color "$GREEN" "  ✓ Health check job configured (every 6 hours)"
+        ((score++))
+    else
+        print_color "$RED" "  ✗ Health check job not found or incorrect"
+        print_color "$YELLOW" "  Expected: 0 */6 * * * /opt/lab-cron/health-check.sh"
+    fi
+    echo ""
+    
+    # CHECK 4: System cron job exists
+    print_color "$CYAN" "[4/$total] Checking system cron job..."
+    if [ -f /etc/cron.d/lab-reports ]; then
+        if grep -qE "0 23 \* \* (0|sun) root.*generate-report.sh" /etc/cron.d/lab-reports; then
+            print_color "$GREEN" "  ✓ System cron job configured (Sunday 11 PM)"
             ((score++))
         else
-            print_color "$YELLOW" "  ⚠ /var/log/journal exists but no journal files found"
-            echo "  Did you run: journalctl --flush ?"
+            print_color "$RED" "  ✗ System cron job exists but incorrect format"
+            print_color "$YELLOW" "  Expected: 0 23 * * 0 root /opt/lab-cron/generate-report.sh"
         fi
     else
-        print_color "$RED" "  ✗ /var/log/journal directory not found"
-        echo "  Create persistent storage with:"
-        echo "    sudo mkdir /var/log/journal"
-        echo "    sudo systemctl restart systemd-journald"
-        echo "    sudo journalctl --flush"
+        print_color "$RED" "  ✗ /etc/cron.d/lab-reports not found"
     fi
     echo ""
     
-    # CHECK 3: Journal size configuration exists
-    print_color "$CYAN" "[3/$total] Checking journal size configuration..."
-    if [ -d /etc/systemd/journald.conf.d ]; then
-        if ls /etc/systemd/journald.conf.d/*.conf >/dev/null 2>&1; then
-            local has_config=false
-            for conf in /etc/systemd/journald.conf.d/*.conf; do
-                if grep -q "^SystemMaxUse=" "$conf" 2>/dev/null || \
-                   grep -q "^MaxRetentionSec=" "$conf" 2>/dev/null; then
-                    has_config=true
-                    break
-                fi
-            done
-            
-            if $has_config; then
-                print_color "$GREEN" "  ✓ Journal size limits configured"
-                ((score++))
-            else
-                print_color "$YELLOW" "  ⚠ Configuration files exist but missing key settings"
-                echo "  Add SystemMaxUse, SystemKeepFree, or MaxRetentionSec"
-            fi
-        else
-            print_color "$RED" "  ✗ No .conf files in /etc/systemd/journald.conf.d/"
-        fi
-    else
-        print_color "$RED" "  ✗ /etc/systemd/journald.conf.d/ directory not found"
-        echo "  Create configuration drop-in directory"
-    fi
-    echo ""
-    
-    # CHECK 4: Understanding of troubleshooting (based on lab-broken service)
-    print_color "$CYAN" "[4/$total] Checking troubleshooting capabilities..."
-    if systemctl status lab-broken.service 2>&1 | grep -q "failed"; then
-        print_color "$GREEN" "  ✓ lab-broken.service available for troubleshooting practice"
+    # CHECK 5: cron.allow exists with correct users
+    print_color "$CYAN" "[5/$total] Checking cron.allow file..."
+    if [ -f /etc/cron.allow ]; then
+        print_color "$GREEN" "  ✓ /etc/cron.allow exists"
         ((score++))
     else
-        print_color "$YELLOW" "  ⚠ lab-broken.service not in expected state"
+        print_color "$RED" "  ✗ /etc/cron.allow not found"
     fi
     echo ""
     
-    # Additional information
-    if [ -d /var/log/journal ]; then
-        echo "Journal information:"
-        local usage=$(journalctl --disk-usage 2>/dev/null | grep -oP '\d+\.\d+[KMGT]' | head -1)
-        if [ -n "$usage" ]; then
-            echo "  Current disk usage: $usage"
+    # CHECK 6: cron.allow contains correct users
+    print_color "$CYAN" "[6/$total] Checking cron.allow contents..."
+    if [ -f /etc/cron.allow ]; then
+        local allow_ok=true
+        if ! grep -q "^cronuser1$" /etc/cron.allow; then
+            print_color "$RED" "  ✗ cronuser1 not in /etc/cron.allow"
+            allow_ok=false
+        fi
+        if ! grep -q "^cronuser2$" /etc/cron.allow; then
+            print_color "$RED" "  ✗ cronuser2 not in /etc/cron.allow"
+            allow_ok=false
+        fi
+        if grep -q "^cronuser3$" /etc/cron.allow; then
+            print_color "$RED" "  ✗ cronuser3 should NOT be in /etc/cron.allow"
+            allow_ok=false
         fi
         
-        local boots=$(journalctl --list-boots 2>/dev/null | wc -l)
-        echo "  Boots recorded: $boots"
+        if [ "$allow_ok" = true ]; then
+            print_color "$GREEN" "  ✓ cron.allow properly configured (cronuser1, cronuser2 only)"
+            ((score++))
+        fi
+    else
+        print_color "$RED" "  ✗ Cannot check contents - /etc/cron.allow not found"
+    fi
+    echo ""
+    
+    # CHECK 7: Verify access control is working as expected
+    print_color "$CYAN" "[7/$total] Verifying access control behavior..."
+    if [ -f /etc/cron.allow ]; then
+        # Just verify the file contains what we expect
+        # Root can always manage crontabs with -u, so we check file content only
+        if grep -q "^cronuser1$" /etc/cron.allow && \
+           grep -q "^cronuser2$" /etc/cron.allow && \
+           ! grep -q "^cronuser3$" /etc/cron.allow; then
+            print_color "$GREEN" "  ✓ Access control configured correctly"
+            echo "    (cronuser1 and cronuser2 allowed, cronuser3 denied by omission)"
+            ((score++))
+        else
+            print_color "$RED" "  ✗ Access control not configured correctly"
+        fi
+    else
+        print_color "$RED" "  ✗ Cannot verify - /etc/cron.allow not found"
     fi
     echo ""
     
@@ -1656,14 +1369,15 @@ validate() {
     if [ $score -eq $total ]; then
         print_color "$GREEN" "STATUS: ✓ PASSED"
         echo ""
-        echo "Excellent work! You've mastered systemd-journald:"
-        echo "  • Querying and filtering journal logs effectively"
-        echo "  • Configuring persistent journal storage"
-        echo "  • Setting journal size and retention limits"
-        echo "  • Using journal for real troubleshooting"
+        echo "Excellent work! You've mastered cron scheduling:"
+        echo "  • Creating user crontab entries"
+        echo "  • Understanding cron time format"
+        echo "  • Creating system-wide cron jobs"
+        echo "  • Managing cron access control"
+        echo "  • Using cron.allow for security"
         echo ""
-        echo "You're ready for RHCSA journald questions!"
-    elif [ $score -ge 3 ]; then
+        echo "You're ready for RHCSA cron questions!"
+    elif [ $score -ge 5 ]; then
         print_color "$GREEN" "STATUS: ✓ PASSED (Good Understanding)"
         echo ""
         echo "Good work! Review the missing pieces to strengthen your knowledge."
@@ -1678,7 +1392,7 @@ validate() {
     export VALIDATION_SCORE=$score
     export VALIDATION_TOTAL=$total
     
-    [ $score -ge 3 ]
+    [ $score -ge 5 ]
 }
 
 #############################################################################
@@ -1694,43 +1408,34 @@ See detailed solutions in each step's solution output above.
 EXAM TIPS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Critical commands for RHCSA:
+Critical skills for RHCSA:
 
-Querying:
-  journalctl                  # All logs
-  journalctl -p err           # Errors only
-  journalctl -u sshd.service  # Specific service
-  journalctl -b               # Current boot
-  journalctl --since "1 hour ago"
-  journalctl -f               # Follow mode
+1. Cron time format: minute hour day month weekday
+2. User crontab: crontab -e (no username in entry)
+3. System cron: /etc/cron.d/ (must include username)
+4. Use absolute paths for all commands
+5. cron.allow takes precedence over cron.deny
+6. Check logs: tail /var/log/cron
 
-Making persistent:
-  mkdir /var/log/journal
-  systemctl restart systemd-journald
-  journalctl --flush          # CRITICAL STEP!
+Common time patterns:
+  Daily 1:30 AM:    30 1 * * *
+  Every 6 hours:    0 */6 * * *
+  Sunday 11 PM:     0 23 * * 0
+  Weekdays 9 AM:    0 9 * * 1-5
+  Every 15 min:     */15 * * * *
 
-Configuring limits:
-  mkdir -p /etc/systemd/journald.conf.d/
-  vi /etc/systemd/journald.conf.d/limits.conf
-  # Add: SystemMaxUse=1G, MaxRetentionSec=30d
-  systemctl restart systemd-journald
+Quick reference:
+  Edit:      crontab -e
+  List:      crontab -l
+  Remove:    crontab -r
+  For user:  crontab -u USER -e
+  System:    vi /etc/cron.d/filename
 
-Checking status:
-  journalctl --disk-usage
-  journalctl --list-boots
-  journalctl --verify
-
-Priority levels (remember):
-  0=emerg 1=alert 2=crit 3=err 4=warning 5=notice 6=info 7=debug
-  Lower number = MORE severe
-
-Critical facts:
-  • Journal is volatile by default (/run/log/journal)
-  • Creating /var/log/journal makes it persistent
-  • MUST run journalctl --flush after creating directory
-  • Configuration goes in /etc/systemd/journald.conf.d/*.conf
-  • Always restart journald after config changes
-  • -p err shows errors AND higher severity (crit, alert, emerg)
+Access control:
+  Allow users:  /etc/cron.allow (whitelist)
+  Deny users:   /etc/cron.deny (blacklist)
+  If cron.allow exists, cron.deny is ignored
+  Root can always manage crontabs
 
 EOF
 }
@@ -1741,26 +1446,36 @@ EOF
 cleanup_lab() {
     echo "Cleaning up lab environment..."
     
-    # Remove broken test service
-    systemctl stop lab-broken.service 2>/dev/null || true
-    systemctl disable lab-broken.service 2>/dev/null || true
-    rm -f /etc/systemd/system/lab-broken.service
-    systemctl daemon-reload
+    # Remove user crontabs
+    crontab -u root -r 2>/dev/null || true
+    crontab -u cronuser1 -r 2>/dev/null || true
+    crontab -u cronuser2 -r 2>/dev/null || true
+    crontab -u cronuser3 -r 2>/dev/null || true
     
-    echo "  ✓ Test services removed"
+    # Remove system cron jobs
+    rm -f /etc/cron.d/lab-reports 2>/dev/null || true
+    
+    # Remove access control files
+    rm -f /etc/cron.allow 2>/dev/null || true
+    rm -f /etc/cron.deny 2>/dev/null || true
+    
+    # Remove test users
+    userdel -r cronuser1 2>/dev/null || true
+    userdel -r cronuser2 2>/dev/null || true
+    userdel -r cronuser3 2>/dev/null || true
+    
+    # Remove scripts and logs
+    rm -rf /opt/lab-cron 2>/dev/null || true
+    rm -f /var/log/lab-cron-backup.log 2>/dev/null || true
+    rm -f /var/log/lab-health-check.log 2>/dev/null || true
+    rm -f /var/log/lab-weekly-report.log 2>/dev/null || true
+    
+    echo "  ✓ All crontabs removed"
+    echo "  ✓ System cron jobs removed"
+    echo "  ✓ Access control files removed"
+    echo "  ✓ Test users removed"
+    echo "  ✓ Scripts and logs removed"
     echo "  ✓ Lab cleanup complete"
-    echo ""
-    echo "Note: Persistent journal and configuration were left in place."
-    echo "This is the recommended configuration for production systems."
-    echo ""
-    echo "To remove persistent journal:"
-    echo "  sudo systemctl stop systemd-journald"
-    echo "  sudo rm -rf /var/log/journal"
-    echo "  sudo systemctl start systemd-journald"
-    echo ""
-    echo "To remove size configuration:"
-    echo "  sudo rm -rf /etc/systemd/journald.conf.d/"
-    echo "  sudo systemctl restart systemd-journald"
 }
 
 # Execute the main framework
