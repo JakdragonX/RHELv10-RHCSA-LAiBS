@@ -726,8 +726,8 @@ validate() {
     if swapon -a 2>/dev/null; then
         local count=$(swapon --show | tail -n +2 | wc -l)
         if [ "$count" -ge 2 ]; then
-            local total=$(free -m | grep Swap | awk '{print $2}')
-            print_color "$GREEN" "  ✓ Both swaps persistent (total: ${total}MB)"
+            local swap_total=$(free -m | grep Swap | awk '{print $2}')
+            print_color "$GREEN" "  ✓ Both swaps persistent (total: ${swap_total}MB)"
             ((score++))
         else
             print_color "$YELLOW" "  ⚠ Only $count swap found (expected 2)"
