@@ -1,5 +1,5 @@
 #!/bin/bash
-# labs/23A-advanced-scripting.sh
+# labs/23A-bash-scripting.sh
 # Lab: Positional Parameters, case, source, and while read
 # Difficulty: Intermediate
 # RHCSA Objective: Create simple shell scripts; use conditionals and loops
@@ -8,8 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../../lab-runner.sh"
 
 LAB_NAME="Positional Parameters, case, source, and while read"
-LAB_DIFFICULTY="Intermediate"
-LAB_TIME_ESTIMATE="25-30 minutes"
+LAB_DIFFICULTY="Beginner"
+LAB_TIME_ESTIMATE="20-25 minutes"
 
 #############################################################################
 # SETUP
@@ -54,43 +54,24 @@ EOF
 prerequisites() {
     cat << 'EOF'
 Knowledge Requirements:
-  • Lab 24A completion (for-loops, while-loops, if-elif-else, command chaining)
-  • Understanding that scripts receive input in multiple ways:
-    hardcoded variables, arguments passed at runtime, or sourced config files
+  • Completion of Lab 24A (for-loops, while-loops, if-else, command chaining)
+  • Comfort writing and running a basic bash script with #!/bin/bash
 
-Commands You'll Use:
-  • source / .     - Execute a file in the current shell (imports its variables)
-  • read           - Read a line from stdin into one or more variables
-  • IFS            - Internal Field Separator (controls how bash splits input)
-  • cut            - Extract fields from delimited text
-  • case/esac      - Multi-branch conditional (like a switch statement)
-  • shift          - Discard $1 and shift all positional parameters left
+What This Lab Teaches (one concept per step):
+  Step 1 — Positional parameters: $1, $2, and ${VAR:-default}
+  Step 2 — case statements: multi-branch dispatch on a single variable
+  Step 3 — while read + IFS: parsing a colon-delimited file line by line
+  Step 4 — source / .: loading variables from a config file
 
-KEY CONCEPTS:
-
-  Positional Parameters:
-    $0   the script name itself
-    $1   first argument passed to the script
-    $2   second argument, $3 third, and so on
-    $@   all arguments as separate words (use in loops)
-    $*   all arguments as a single word (rarely what you want)
-    $#   total count of arguments passed
-
-  source vs executing a script:
-    ./script.sh  — runs in a SUBSHELL; its variables disappear when done
-    source script.sh  — runs in the CURRENT shell; its variables persist
-    . script.sh   — identical to source (POSIX spelling)
-
-  IFS (Internal Field Separator):
-    Bash uses IFS to split strings into words. Default: space, tab, newline.
-    Set IFS=: to split on colons (useful for /etc/passwd-style files).
-    Always restore IFS after changing it, or scope it with a subshell.
+Each step shows you the syntax first, then asks you to write a short script
+(5-10 lines) that uses it. The solutions are minimal on purpose — the goal
+is to get the pattern into muscle memory.
 
 Files You'll Create:
-  • /tmp/lab23a/scripts/greet.sh       - Uses $1, $2 with validation
-  • /tmp/lab23a/scripts/dispatch.sh    - Uses case for multi-branch logic
-  • /tmp/lab23a/scripts/parse-users.sh - Uses while read + IFS to parse CSV
-  • /tmp/lab23a/scripts/deploy.sh      - Sources a config file
+  • /tmp/lab23a/scripts/greet.sh        - 6 lines
+  • /tmp/lab23a/scripts/dispatch.sh     - 12 lines
+  • /tmp/lab23a/scripts/parse-users.sh  - 8 lines
+  • /tmp/lab23a/scripts/deploy.sh       - 8 lines
 EOF
 }
 
@@ -100,52 +81,30 @@ EOF
 scenario() {
     cat << 'EOF'
 SCENARIO:
-The team's bash scripts are all hardcoded with fixed paths and usernames.
-You need to refactor them to accept arguments at runtime, use sourced config
-files for site-specific values, parse structured data files cleanly, and
-use case statements to handle multiple command modes in a single script.
-
-BACKGROUND:
-These four patterns appear constantly in real RHCSA exam scripts and
-production automation: accepting and validating arguments, dispatching
-to sub-functions via case, parsing colon- or CSV-delimited files with
-while read, and sourcing shared config rather than duplicating values.
+You're writing your first real bash scripts. Each one is short, but each
+introduces one new pattern you'll use constantly on the RHCSA exam and in
+day-to-day sysadmin work.
 
 OBJECTIVES:
-  1. Write greet.sh — accepts a name ($1) and optional title ($2). If no
-     name is given, print a usage message and exit 1. Otherwise print:
-     "Hello, [title] [name]!" (title defaults to "User" if not provided).
-     Validate: the script must exit 1 when called with no arguments.
+  1. Write greet.sh — a script that accepts a name as $1 and prints a greeting.
+     If no name is given, it prints a usage message and exits with code 1.
 
-  2. Write dispatch.sh — accepts one argument (start|stop|status|restart).
-     Use a case statement to print a different message for each. For any
-     other value print "Unknown command: $1" and exit 1.
-     The default (*) case must exit 1.
+  2. Write dispatch.sh — a script that accepts a mode word (start|stop|status)
+     and prints a different message for each, using a case statement.
 
-  3. Write parse-users.sh — reads /tmp/lab23a/users.csv line by line using
-     while read with IFS=: splitting each line into three variables
-     (username, group, shell). For each user, append a line to
-     /tmp/lab23a/output/user-report.txt in this format:
-     "User: alice | Group: developers | Shell: bash"
+  3. Write parse-users.sh — a script that reads a colon-delimited file
+     line by line and prints a formatted summary of each line.
 
-  4. Write deploy.sh — sources /tmp/lab23a/config/deploy.conf to load its
-     variables, then uses those variables to:
-     - Create $DEPLOY_DIR
-     - Write "Deployed $APP_NAME at $(date)" to $LOG_FILE
-     Validate: $DEPLOY_DIR must exist and $LOG_FILE must contain "Deployed".
+  4. Write deploy.sh — a script that loads variables from an external config
+     file using source, then uses those variables to do its work.
 
 HINTS:
-  • [ -z "$1" ] tests if $1 is empty (no argument given)
-  • case $1 in start) ... ;; stop) ... ;; *) ... ;; esac
-  • while IFS=: read user group shell; do ... done < file
-  • source /path/to/file  OR  . /path/to/file — both work on the exam
-  • After sourcing, $APP_NAME, $DEPLOY_DIR etc. are available as normal vars
+  • Each step shows you the syntax before asking you to write it
+  • All four scripts are short — resist the urge to over-engineer
+  • Test each script from the command line immediately after writing it
 
 SUCCESS CRITERIA:
-  • greet.sh exits 1 with no args; prints greeting with $1 and optional $2
-  • dispatch.sh handles start/stop/status/restart and exits 1 for unknown
-  • /tmp/lab23a/output/user-report.txt has 4 lines, one per user in the CSV
-  • $DEPLOY_DIR exists and $LOG_FILE contains "Deployed"
+  • All four scripts exist, are executable, and produce the expected output
 EOF
 }
 
@@ -154,10 +113,10 @@ EOF
 #############################################################################
 objectives_quick() {
     cat << 'EOF'
-  ☐ 1. greet.sh — validate $1 exists; print "Hello, ${2:-User} $1!"; exit 1 if no args
-  ☐ 2. dispatch.sh — case $1 in start|stop|status|restart with * exit 1 default
-  ☐ 3. parse-users.sh — while IFS=: read user group shell; output user-report.txt
-  ☐ 4. deploy.sh — source deploy.conf; mkdir $DEPLOY_DIR; write to $LOG_FILE
+  ☐ 1. greet.sh — print "Hello, $1!" or usage message if no argument given
+  ☐ 2. dispatch.sh — case statement: start|stop|status prints a message; * exits 1
+  ☐ 3. parse-users.sh — while IFS=: read to print each user from users.csv
+  ☐ 4. deploy.sh — source deploy.conf; use its variables to create dir and write log
 EOF
 }
 
@@ -170,33 +129,49 @@ get_step_count() {
 
 scenario_context() {
     cat << 'EOF'
-You need to refactor a set of hardcoded scripts to accept arguments,
-use sourced config files, parse structured data, and handle multiple
-operating modes through a case statement.
+Four short scripts, one new pattern each. Read the syntax explanation in
+each step before writing — the goal is to recognise and reproduce these
+patterns, not to figure them out from scratch.
 EOF
 }
 
 # STEP 1: Positional parameters with validation
 show_step_1() {
     cat << 'EOF'
-TASK: Write greet.sh using positional parameters and argument validation
+CONCEPT: Positional Parameters and Argument Validation
+──────────────────────────────────────────────────────
+When you run a script, any words after the script name become positional
+parameters:
+
+  ./greet.sh alice Dr
+  #           $1    $2
+
+  $1   → "alice"   (first argument)
+  $2   → "Dr"      (second argument)
+  $#   → 2         (total count of arguments)
+  $0   → "./greet.sh" (the script name itself)
+
+To check if no argument was given, test if $1 is empty:
+  if [ -z "$1" ]; then        # -z means "zero length" (empty string)
+      echo "Usage: $0 <name>"
+      exit 1
+  fi
+
+To use a default value when $2 is not provided:
+  TITLE="${2:-User}"          # uses "User" if $2 is unset or empty
+  echo "Hello, ${TITLE} ${1}!"
+
+──────────────────────────────────────────────────────
+TASK: Write greet.sh using the pattern above
 
 Requirements:
   • Script: /tmp/lab23a/scripts/greet.sh
-  • If called with no arguments: print "Usage: greet.sh <name> [title]" and exit 1
-  • If called with one argument ($1 = name): print "Hello, User alice!"
-  • If called with two arguments ($1 = name, $2 = title): print "Hello, Dr alice!"
+  • If $1 is empty: print "Usage: greet.sh <name>" and exit 1
+  • Otherwise: print "Hello, ${2:-User} $1!"
   • Make executable, then test:
-      /tmp/lab23a/scripts/greet.sh              # should exit 1
-      /tmp/lab23a/scripts/greet.sh alice        # Hello, User alice!
-      /tmp/lab23a/scripts/greet.sh alice Dr     # Hello, Dr alice!
-
-Key variables:
-  $1   first argument       $#   argument count
-  $2   second argument      $0   script name
-
-Default value syntax (no if needed):
-  ${2:-User}   means: use $2 if set and non-empty, otherwise use "User"
+      /tmp/lab23a/scripts/greet.sh              → exits 1
+      /tmp/lab23a/scripts/greet.sh alice        → Hello, User alice!
+      /tmp/lab23a/scripts/greet.sh alice Dr     → Hello, Dr alice!
 EOF
 }
 
@@ -255,48 +230,26 @@ SOLUTION:
 cat > /tmp/lab23a/scripts/greet.sh << 'SCRIPT'
 #!/bin/bash
 if [ -z "$1" ]; then
-    echo "Usage: $(basename $0) <name> [title]"
+    echo "Usage: greet.sh <name>"
     exit 1
 fi
-
-NAME="$1"
-TITLE="${2:-User}"
-
-echo "Hello, ${TITLE} ${NAME}!"
+echo "Hello, ${2:-User} ${1}!"
 SCRIPT
 
 chmod +x /tmp/lab23a/scripts/greet.sh
 
-# Test it:
-/tmp/lab23a/scripts/greet.sh              # exits 1, prints usage
-echo "Exit code: $?"                      # → 1
-/tmp/lab23a/scripts/greet.sh alice        # → Hello, User alice!
-/tmp/lab23a/scripts/greet.sh alice Dr     # → Hello, Dr alice!
+Two things to remember:
+  [ -z "$1" ]: the -z flag tests for an empty string. Always quote "$1" —
+    if $1 is unset and unquoted, bash removes it entirely and [ -z ] gets
+    no arguments at all, which causes a different error.
 
-Key concepts:
-
-  [ -z "$1" ]: -z tests if a string is ZERO length (empty).
-    If no argument was given, $1 is empty/unset → -z is true → print usage.
-    Always quote: [ -z "$1" ] not [ -z $1 ] (unquoted fails if $1 is unset)
-
-  $(basename $0): $0 is the script's name including path. basename strips
-    the path so the usage message shows just the filename, not the full path.
-
-  ${2:-User}: parameter expansion with default value.
-    If $2 is unset or empty → substitute "User"
-    If $2 has a value → use that value
-    Other useful forms:
-      ${VAR:-default}    use default if VAR unset or empty
-      ${VAR:=default}    set VAR to default if unset or empty (modifies VAR)
-      ${VAR:?message}    exit with message if VAR unset or empty
-      ${VAR:+other}      use 'other' if VAR IS set (inverse of :-)
-
-  exit 1: terminates the script immediately with exit code 1.
-    The calling shell or script can test this: if ./greet.sh; then ...
+  ${2:-User}: the :- operator provides a fallback. Read it as "use $2,
+    or if that's empty, use User". This avoids needing a second if block.
 
 Verification:
-  /tmp/lab23a/scripts/greet.sh; echo $?           # should print 1
-  /tmp/lab23a/scripts/greet.sh alice; echo $?     # should print 0
+  /tmp/lab23a/scripts/greet.sh; echo "exit: $?"         # → exit: 1
+  /tmp/lab23a/scripts/greet.sh alice                     # → Hello, User alice!
+  /tmp/lab23a/scripts/greet.sh alice Dr                  # → Hello, Dr alice!
 
 EOF
 }
@@ -312,33 +265,42 @@ hint_step_2() {
 # STEP 2: case statement
 show_step_2() {
     cat << 'EOF'
+CONCEPT: case Statements
+────────────────────────
+case matches one variable against a list of patterns. It's cleaner than
+a long if-elif chain when you're checking a single value:
+
+  case $1 in
+      start)
+          echo "Starting..."
+          ;;
+      stop)
+          echo "Stopping..."
+          ;;
+      *)                      # * matches anything not caught above
+          echo "Unknown: $1"
+          exit 1
+          ;;
+  esac
+
+Rules:
+  • Each branch ends with ;; (required — don't forget it)
+  • * is the catch-all default, always put it last
+  • Separate multiple patterns with |: start|begin) matches either word
+  • esac closes the block (case spelled backwards)
+
+────────────────────────────────────────────
 TASK: Write dispatch.sh using a case statement
 
 Requirements:
   • Script: /tmp/lab23a/scripts/dispatch.sh
-  • Accepts one argument: start | stop | status | restart
-  • Print a different message for each valid option
-  • For any other value (including no argument): print "Unknown command: $1"
-    and exit 1
-  • Make executable and test all four valid options plus one invalid one
-
-case syntax:
-  case $variable in
-      pattern1)
-          commands
-          ;;
-      pattern2|pattern3)    # pipe = OR
-          commands
-          ;;
-      *)                    # default (catch-all)
-          commands
-          ;;
-  esac
-
-Why case over if-elif:
-  case is cleaner and faster when matching one variable against many fixed
-  values. if-elif works but becomes hard to read beyond 3-4 branches.
-  case also supports glob patterns: case $file in *.txt) ... ;; esac
+  • start   → print "Starting service"
+  • stop    → print "Stopping service"
+  • status  → print "Service is running"
+  • anything else → print "Unknown: $1" and exit 1
+  • Make executable and test each branch:
+      ./dispatch.sh start
+      ./dispatch.sh bogus; echo $?    # → 1
 EOF
 }
 
@@ -387,65 +349,24 @@ SOLUTION:
 cat > /tmp/lab23a/scripts/dispatch.sh << 'SCRIPT'
 #!/bin/bash
 case $1 in
-    start)
-        echo "Starting service..."
-        ;;
-    stop)
-        echo "Stopping service..."
-        ;;
-    status)
-        echo "Service is running"
-        ;;
-    restart)
-        echo "Restarting service..."
-        ;;
-    *)
-        echo "Unknown command: $1"
-        echo "Usage: $(basename $0) {start|stop|status|restart}"
-        exit 1
-        ;;
+    start)   echo "Starting service" ;;
+    stop)    echo "Stopping service" ;;
+    status)  echo "Service is running" ;;
+    *)       echo "Unknown: $1"; exit 1 ;;
 esac
 SCRIPT
 
 chmod +x /tmp/lab23a/scripts/dispatch.sh
 
-# Test:
-/tmp/lab23a/scripts/dispatch.sh start
-/tmp/lab23a/scripts/dispatch.sh bogus; echo $?   # → exits 1
-
-Key concepts:
-
-  Pattern syntax:
-    start)     exact match
-    start|stop) matches either — | means OR inside case patterns
-    *.txt)     glob pattern — matches any value ending in .txt
-    [Yy]es)    character class — matches "Yes" or "yes"
-    *)         matches everything — always put this last
-
-  ;; terminates each branch. Forgetting ;; causes bash to fall through
-  into the next branch (unlike C's switch, bash does NOT fall through
-  by default — ;; prevents it, but missing it causes a parse error).
-
-  case does not require break (unlike C). Each branch ends at ;;.
-
-  Real-world case pattern — script mode dispatch:
-    case $1 in
-        -h|--help)    show_help ;;
-        -v|--verbose) VERBOSE=1 ;;
-        -f|--file)    FILE="$2"; shift ;;  # shift consumes $2
-        *)            echo "Unknown option"; exit 1 ;;
-    esac
-
-  shift: discards $1 and shifts all other parameters left.
-    Before shift: $1="-f" $2="file.txt" $3="other"
-    After shift:  $1="file.txt" $2="other"
-    Useful for option parsing in loops.
+One thing to remember:
+  The ;; after each branch is not optional. Missing it causes a parse error.
+  Each branch can also be written on one line as shown above — fine for
+  short commands; use the multi-line form from the concept box when the
+  body is longer than one command.
 
 Verification:
-  for cmd in start stop status restart bogus; do
-      echo -n "$cmd: "
-      /tmp/lab23a/scripts/dispatch.sh "$cmd"
-  done
+  /tmp/lab23a/scripts/dispatch.sh start          # → Starting service
+  /tmp/lab23a/scripts/dispatch.sh bogus; echo $? # → exit 1
 
 EOF
 }
@@ -459,29 +380,44 @@ hint_step_3() {
 # STEP 3: while read with IFS
 show_step_3() {
     cat << 'EOF'
-TASK: Parse a colon-delimited CSV using while read with IFS
+CONCEPT: while read with IFS for Parsing Delimited Files
+─────────────────────────────────────────────────────────
+IFS (Internal Field Separator) controls how bash splits a line into words.
+By default it splits on spaces. Setting IFS=: splits on colons instead —
+which is exactly what you need for /etc/passwd-style files.
 
-The file /tmp/lab23a/users.csv has this format:
+This pattern reads a file line by line and splits each line on ':':
+
+  while IFS=: read -r field1 field2 field3; do
+      echo "$field1 and $field2"
+  done < /path/to/file
+
+The file /tmp/lab23a/users.csv looks like:
   alice:developers:bash
   bob:sysadmin:zsh
 
+So with IFS=: read -r username group shell:
+  • On the first iteration: username=alice  group=developers  shell=bash
+  • On the second:          username=bob    group=sysadmin    shell=zsh
+
+Why use this instead of for $(cat file)?
+  for line in $(cat file) splits on ALL whitespace and breaks if any
+  field contains a space. while read processes one complete line at a time
+  and is safe for any content.
+
+The -r flag prevents backslashes in the file from being treated as escape
+characters. Always use -r unless you specifically need that behaviour.
+
+─────────────────────────────────────────────────────────
+TASK: Write parse-users.sh using while IFS=: read
+
 Requirements:
   • Script: /tmp/lab23a/scripts/parse-users.sh
-  • Read each line and split on ':' using IFS
-  • Assign fields to variables: username, group, shell
-  • Append one formatted line per user to /tmp/lab23a/output/user-report.txt:
+  • Read /tmp/lab23a/users.csv line by line, splitting on ':'
+  • For each line print to /tmp/lab23a/output/user-report.txt:
     "User: alice | Group: developers | Shell: bash"
-  • Clear the output file at the start of each run
-
-while read with IFS syntax:
-  while IFS=: read username group shell; do
-      echo "$username $group $shell"
-  done < /tmp/lab23a/users.csv
-
-Why while read instead of for:
-  for line in $(cat file): splits on ALL whitespace — breaks on spaces in values
-  while read -r line: reads one complete line at a time — handles spaces safely
-  -r flag: prevents backslash from being treated as an escape character
+  • Clear the output file at the start (> "$OUTPUT")
+  • Make executable and run it
 EOF
 }
 
@@ -534,57 +470,26 @@ SOLUTION:
 cat > /tmp/lab23a/scripts/parse-users.sh << 'SCRIPT'
 #!/bin/bash
 OUTPUT="/tmp/lab23a/output/user-report.txt"
-
-# Clear output file
 > "$OUTPUT"
 
 while IFS=: read -r username group shell; do
     echo "User: $username | Group: $group | Shell: $shell" >> "$OUTPUT"
 done < /tmp/lab23a/users.csv
 
-echo "Report written to $OUTPUT"
 cat "$OUTPUT"
 SCRIPT
 
 chmod +x /tmp/lab23a/scripts/parse-users.sh
 /tmp/lab23a/scripts/parse-users.sh
 
-Key concepts:
-
-  IFS=: before read: sets the field separator to colon for this read
-    command only. The assignment is scoped to the command — IFS reverts
-    after each iteration. This is safer than setting IFS globally.
-
-    Alternative (global, requires restore):
-      OLD_IFS=$IFS
-      IFS=:
-      while read user group shell; do ...; done < file
-      IFS=$OLD_IFS
-
-  -r flag: without -r, a backslash at the end of a line is treated as
-    a continuation character and the next line is appended. -r treats
-    backslashes as literal characters. Always use -r unless you
-    specifically need backslash continuation.
-
-  < file redirection to while: the while loop reads from the file via
-    stdin redirection. This keeps the loop in the current shell, so
-    variables set inside the loop are visible after it. Contrast with:
-    cat file | while read ...; done  — this creates a subshell for the
-    while body, and any variables you set inside vanish afterward.
-
-  Parsing /etc/passwd the same way:
-    while IFS=: read user pass uid gid gecos home shell; do
-        echo "$user uses $shell"
-    done < /etc/passwd
-
-  Process substitution alternative (avoids subshell issue with pipes):
-    while read line; do
-        echo "$line"
-    done < <(command_that_produces_output)
+One thing to remember:
+  The redirection goes at the end of 'done', not at the top of the loop.
+  done < file feeds the file into the whole while loop as stdin. If you
+  put 'cat file |' before the while instead, the loop runs in a subshell
+  and any variables you set inside it vanish when the loop ends.
 
 Verification:
-  cat /tmp/lab23a/output/user-report.txt
-  wc -l /tmp/lab23a/output/user-report.txt   # should be 4
+  cat /tmp/lab23a/output/user-report.txt   # should have 4 lines
 
 EOF
 }
@@ -597,29 +502,35 @@ hint_step_4() {
 # STEP 4: source / .
 show_step_4() {
     cat << 'EOF'
-TASK: Write deploy.sh that sources a config file and uses its variables
+CONCEPT: source and . — Loading Variables from a Config File
+─────────────────────────────────────────────────────────────
+When you run a script normally (./script.sh or bash script.sh), it runs
+in its own subshell. Any variables it sets disappear when it finishes.
 
-The config file /tmp/lab23a/config/deploy.conf defines:
+source (or its POSIX alias .) runs a file in the CURRENT shell instead,
+so its variables are available for the rest of your script:
+
+  source /path/to/config.conf    # bash spelling
+  . /path/to/config.conf         # POSIX spelling — identical
+
+The config file /tmp/lab23a/config/deploy.conf looks like:
   APP_NAME="myapp"
   DEPLOY_DIR="/tmp/lab23a/output/deploy"
   LOG_FILE="/tmp/lab23a/output/deploy.log"
-  MAX_BACKUPS=3
+
+After sourcing that file, $APP_NAME, $DEPLOY_DIR, and $LOG_FILE are
+all available as normal variables in your script.
+
+─────────────────────────────────────────────────────────
+TASK: Write deploy.sh that sources deploy.conf and uses its variables
 
 Requirements:
   • Script: /tmp/lab23a/scripts/deploy.sh
-  • Source the config file at the top of the script
-  • Use $DEPLOY_DIR, $APP_NAME, and $LOG_FILE — do NOT hardcode these paths
-  • Create $DEPLOY_DIR (mkdir -p)
+  • Source /tmp/lab23a/config/deploy.conf
+  • Create $DEPLOY_DIR with mkdir -p
   • Write "Deployed $APP_NAME at $(date)" to $LOG_FILE
-  • Print a summary showing which variables were loaded from config
-
-source syntax:
-  source /path/to/file.conf   # bash spelling
-  . /path/to/file.conf        # POSIX spelling — identical behavior
-
-Both execute the file in the CURRENT shell, making its variables available
-to the rest of the script. Running ./file.conf or bash file.conf would
-execute it in a subshell — its variables would disappear immediately.
+  • Do NOT hardcode any paths — use the variables from the config file
+  • Make executable and run it
 EOF
 }
 
@@ -679,60 +590,26 @@ SOLUTION:
 ─────────
 cat > /tmp/lab23a/scripts/deploy.sh << 'SCRIPT'
 #!/bin/bash
-CONFIG="/tmp/lab23a/config/deploy.conf"
+source /tmp/lab23a/config/deploy.conf
 
-# Verify config exists before sourcing
-if [ ! -f "$CONFIG" ]; then
-    echo "ERROR: Config file not found: $CONFIG"
-    exit 1
-fi
-
-# Source the config — loads APP_NAME, DEPLOY_DIR, LOG_FILE, MAX_BACKUPS
-source "$CONFIG"
-
-# Use the sourced variables
 mkdir -p "$DEPLOY_DIR"
 echo "Deployed $APP_NAME at $(date)" >> "$LOG_FILE"
 
-echo "Deploy summary:"
-echo "  App:        $APP_NAME"
-echo "  Deploy dir: $DEPLOY_DIR"
-echo "  Log file:   $LOG_FILE"
-echo "  Max backups: $MAX_BACKUPS"
+echo "Done — log at $LOG_FILE"
 SCRIPT
 
 chmod +x /tmp/lab23a/scripts/deploy.sh
 /tmp/lab23a/scripts/deploy.sh
 
-Key concepts:
-
-  source vs subshell execution:
-    ./deploy.conf        subshell — variables vanish when done
-    bash deploy.conf     subshell — same issue
-    source deploy.conf   current shell — variables persist afterward
-    . deploy.conf        identical to source (POSIX spelling)
-
-  Why this pattern matters:
-    Config files let you separate site-specific values from script logic.
-    The same deploy.sh works in dev, staging, and production by pointing
-    at different .conf files. The script code never changes.
-
-  Checking the config file exists before sourcing is important: if source
-  is given a non-existent file, bash errors out but the script may continue
-  executing with undefined variables — leading to confusing failures.
-
-  source in interactive shells:
-    You can also use source in your bash session to load environment
-    variables from a file without starting a new shell. This is exactly
-    what ~/.bashrc does: it's sourced by your login shell.
-
-  Multiple config files / layering:
-    source /etc/myapp/defaults.conf   # site-wide defaults
-    source ~/.myapp.conf              # user overrides (loaded after, wins)
+One thing to remember:
+  source runs the config file in the same shell process as deploy.sh, so
+  $APP_NAME and friends are set for the rest of the script. If you used
+  bash deploy.conf or ./deploy.conf instead, they'd run in a child process
+  and those variables would be lost the moment the child exits.
 
 Verification:
   cat /tmp/lab23a/output/deploy.log   # → Deployed myapp at [timestamp]
-  ls /tmp/lab23a/output/deploy/       # directory exists
+  ls /tmp/lab23a/output/deploy/       # directory should exist
 
 EOF
 }
@@ -870,38 +747,34 @@ validate() {
 #############################################################################
 solution() {
     cat << 'EOF'
-COMPLETE SOLUTION WALKTHROUGH
+COMPLETE SOLUTION REFERENCE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-STEP 1 — greet.sh (positional parameters):
-─────────────────────────────────────────────────────────────────
+STEP 1 — greet.sh (positional parameters + default value):
   #!/bin/bash
-  [ -z "$1" ] && { echo "Usage: $(basename $0) <name> [title]"; exit 1; }
+  if [ -z "$1" ]; then echo "Usage: greet.sh <name>"; exit 1; fi
   echo "Hello, ${2:-User} ${1}!"
 
-  $1, $2: positional parameters from command line
-  ${2:-User}: use $2 if set, otherwise "User"
-  -z: test for empty string
+  $1, $2 = arguments passed at runtime
+  ${2:-User} = use $2, or "User" if $2 is empty
+  [ -z "$VAR" ] = true if VAR is empty (zero length)
 
 
 STEP 2 — dispatch.sh (case statement):
-─────────────────────────────────────────────────────────────────
   #!/bin/bash
   case $1 in
-      start)   echo "Starting..." ;;
-      stop)    echo "Stopping..." ;;
-      status)  echo "Status: running" ;;
-      restart) echo "Restarting..." ;;
+      start)   echo "Starting service" ;;
+      stop)    echo "Stopping service" ;;
+      status)  echo "Service is running" ;;
       *)       echo "Unknown: $1"; exit 1 ;;
   esac
 
-  *) is the catch-all default — always put it last
-  ;; terminates each branch (required — not optional like C's break)
-  | between patterns means OR: start|begin)
+  *) = catch-all default (always last)
+  ;; = required branch terminator
+  pattern1|pattern2) = OR match
 
 
-STEP 3 — parse-users.sh (while read + IFS):
-─────────────────────────────────────────────────────────────────
+STEP 3 — parse-users.sh (while IFS=: read):
   #!/bin/bash
   > /tmp/lab23a/output/user-report.txt
   while IFS=: read -r username group shell; do
@@ -909,51 +782,29 @@ STEP 3 — parse-users.sh (while read + IFS):
           >> /tmp/lab23a/output/user-report.txt
   done < /tmp/lab23a/users.csv
 
-  IFS=: scoped to read command; -r prevents backslash interpretation
-  < file feeds the file into the while loop via stdin
+  IFS=: splits each line on colons
+  -r prevents backslash interpretation
+  done < file = feed file as stdin (keeps loop in current shell)
 
 
 STEP 4 — deploy.sh (source):
-─────────────────────────────────────────────────────────────────
   #!/bin/bash
   source /tmp/lab23a/config/deploy.conf
   mkdir -p "$DEPLOY_DIR"
   echo "Deployed $APP_NAME at $(date)" >> "$LOG_FILE"
 
-  source runs the config in the current shell — variables persist
-  . is the POSIX equivalent of source
-
-
-CONCEPTUAL UNDERSTANDING
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-The Four Input Patterns for Scripts:
-  1. Hardcoded:   VAR="value" inside the script
-  2. Arguments:   $1, $2, $@ — passed at runtime
-  3. Sourced:     . config.conf — loaded from external file
-  4. Prompted:    read -p "Enter value: " VAR — interactive
-
-When to use which:
-  Arguments → when values vary per invocation (filename, username)
-  source    → when values are site-specific but stable (paths, app names)
-  read      → when the script needs interactive user input
-  Hardcoded → only for truly constant values that never change
-
-while read vs for loop for files:
-  for line in $(cat file)  → splits on whitespace; breaks on spaces in data
-  while read -r line       → reads one full line; safe for any content
-  Always prefer while read for line-by-line file processing.
+  source = run file in current shell; its variables persist
+  . = identical POSIX spelling of source
 
 
 EXAM TIPS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. Know $1, $2, $@, $#, $0 — positional parameters appear on every exam
-2. case is cleaner than long if-elif chains — use it when matching one var
-3. while IFS=: read — the standard pattern for parsing /etc/passwd-style files
-4. source / . — both spellings work; . is more portable (POSIX)
-5. ${VAR:-default} — parameter expansion with fallback; avoids if blocks
-6. Always validate arguments: [ -z "$1" ] && { echo "Usage..."; exit 1; }
+1. Always quote "$1" in tests — unquoted $1 disappears if it's unset
+2. case ;; is not optional — missing it is a syntax error
+3. done < file, not cat file | while — the pipe creates a subshell
+4. source and . are identical — use whichever you remember
+5. ${VAR:-default} is shorter than an if block for optional arguments
 
 EOF
 }
