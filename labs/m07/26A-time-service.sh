@@ -93,18 +93,21 @@ OBJECTIVES:
   4. Use date to print the current time in two custom formats:
        date +"%A %d %B %Y"     (e.g. Monday 18 May 2026)
        date +"%H:%M:%S"        (e.g. 14:32:07)
+     Then create a log entry file using command substitution:
+       echo "Service started at $(date +"%Y-%m-%d %H:%M:%S")" > /tmp/lab26a-timestamp.txt
 
 HINTS:
   • timedatectl list-timezones | grep America lists available US timezones
   • chronyc sources output: * = current sync source, + = acceptable, ? = unreachable
   • After editing chrony.conf, always restart chronyd for changes to take effect
   • date format strings: %A=weekday %d=day %B=month %Y=year %H=hour %M=min %S=sec
+  • $() is command substitution — $(date +...) runs date and inserts its output inline
 
 SUCCESS CRITERIA:
   • timedatectl status shows timezone as America/New_York
   • NTP service (chronyd) is active and synchronized
   • /etc/chrony.conf contains the Cloudflare server line
-  • chronyc sources shows the new server in the list
+  • /tmp/lab26a-timestamp.txt exists and contains "Service started at"
 EOF
 }
 
@@ -116,7 +119,7 @@ objectives_quick() {
   ☐ 1. timedatectl set-timezone America/New_York; verify with timedatectl status
   ☐ 2. chronyc sources — confirm sync source (*) and understand output columns
   ☐ 3. Add 'server time.cloudflare.com iburst' to /etc/chrony.conf; restart chronyd
-  ☐ 4. date +"%A %d %B %Y" and date +"%H:%M:%S"
+  ☐ 4. date +"%A %d %B %Y" and date +"%H:%M:%S"; write timestamp to /tmp/lab26a-timestamp.txt
 EOF
 }
 
