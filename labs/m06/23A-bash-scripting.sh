@@ -1,15 +1,13 @@
 #!/bin/bash
-# labs/24A-bash-scripting.sh
-# Lab: Bash Scripting Fundamentals - Loops and Conditionals
+# labs/23A-advanced-scripting.sh
+# Lab: Positional Parameters, case, source, and while read
 # Difficulty: Intermediate
-# RHCSA Objective: Create simple shell scripts
+# RHCSA Objective: Create simple shell scripts; use conditionals and loops
 
-# Source the lab framework
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../../lab-runner.sh"
 
-# Lab metadata
-LAB_NAME="Bash Scripting Fundamentals - Loops and Conditionals"
+LAB_NAME="Positional Parameters, case, source, and while read"
 LAB_DIFFICULTY="Intermediate"
 LAB_TIME_ESTIMATE="25-30 minutes"
 
@@ -18,40 +16,37 @@ LAB_TIME_ESTIMATE="25-30 minutes"
 #############################################################################
 setup_lab() {
     echo "Preparing lab environment..."
-    
-    # Clean up previous attempts
-    rm -rf /tmp/script-lab 2>/dev/null || true
-    
-    # Create working directory
-    mkdir -p /tmp/script-lab/{data,scripts,logs}
-    
-    # Create sample data files
-    cat > /tmp/script-lab/data/servers.txt << 'EOF'
-web1
-web2
-db1
-cache1
-backup1
+
+    rm -rf /tmp/lab23a 2>/dev/null || true
+    mkdir -p /tmp/lab23a/{scripts,output,config}
+
+    # A structured data file for while read parsing
+    cat > /tmp/lab23a/users.csv << 'EOF'
+alice:developers:bash
+bob:sysadmin:zsh
+charlie:developers:bash
+diana:dba:sh
 EOF
 
-    cat > /tmp/script-lab/data/services.txt << 'EOF'
-nginx
-postgresql
-redis
+    # A partial /etc/passwd-style file for IFS parsing practice
+    cat > /tmp/lab23a/accounts.txt << 'EOF'
+webuser:x:1001:1001:Web Application User:/home/webuser:/bin/bash
+dbuser:x:1002:1002:Database User:/home/dbuser:/bin/bash
+monuser:x:1003:1003:Monitoring User:/home/monuser:/bin/sh
 EOF
 
-    cat > /tmp/script-lab/data/users.txt << 'EOF'
-alice
-bob
-charlie
+    # Config file to be sourced
+    cat > /tmp/lab23a/config/deploy.conf << 'EOF'
+# Deploy configuration — sourced by deploy.sh
+APP_NAME="myapp"
+DEPLOY_DIR="/tmp/lab23a/output/deploy"
+LOG_FILE="/tmp/lab23a/output/deploy.log"
+MAX_BACKUPS=3
 EOF
 
-    # Create files with different sizes for testing
-    dd if=/dev/zero of=/tmp/script-lab/data/small.dat bs=1K count=10 2>/dev/null
-    dd if=/dev/zero of=/tmp/script-lab/data/medium.dat bs=1M count=5 2>/dev/null
-    dd if=/dev/zero of=/tmp/script-lab/data/large.dat bs=1M count=20 2>/dev/null
-    
-
+    echo "  ✓ Created /tmp/lab23a with sample data"
+    echo "  ✓ System ready for fresh lab start"
+}
 
 #############################################################################
 # PREREQUISITES
@@ -59,31 +54,43 @@ EOF
 prerequisites() {
     cat << 'EOF'
 Knowledge Requirements:
-  • Basic command line usage
-  • Understanding of variables from previous labs
-  • Familiarity with file operations
+  • Lab 24A completion (for-loops, while-loops, if-elif-else, command chaining)
+  • Understanding that scripts receive input in multiple ways:
+    hardcoded variables, arguments passed at runtime, or sourced config files
 
 Commands You'll Use:
-  • for/while - Loop constructs
-  • if/then/else - Conditional statements
-  • test/[ ] - Condition testing
-  • [[ ]] - Enhanced test operator
-  • && - Execute if previous succeeds
-  • || - Execute if previous fails
-  • ; - Command separator
+  • source / .     - Execute a file in the current shell (imports its variables)
+  • read           - Read a line from stdin into one or more variables
+  • IFS            - Internal Field Separator (controls how bash splits input)
+  • cut            - Extract fields from delimited text
+  • case/esac      - Multi-branch conditional (like a switch statement)
+  • shift          - Discard $1 and shift all positional parameters left
 
-Core Concepts You'll Learn:
-  • For loops: Iterate over lists, ranges, files
-  • While loops: Repeat while condition is true
-  • If statements: Execute code conditionally
-  • Test operators: Compare numbers, strings, files
-  • Command chaining: &&, ||, ;
-  • Exit codes: $? and success/failure
+KEY CONCEPTS:
 
-Why This Matters:
-  Shell scripting is the glue that holds Linux automation together.
-  These fundamentals let you automate repetitive tasks, create
-  system maintenance scripts, and build deployment pipelines.
+  Positional Parameters:
+    $0   the script name itself
+    $1   first argument passed to the script
+    $2   second argument, $3 third, and so on
+    $@   all arguments as separate words (use in loops)
+    $*   all arguments as a single word (rarely what you want)
+    $#   total count of arguments passed
+
+  source vs executing a script:
+    ./script.sh  — runs in a SUBSHELL; its variables disappear when done
+    source script.sh  — runs in the CURRENT shell; its variables persist
+    . script.sh   — identical to source (POSIX spelling)
+
+  IFS (Internal Field Separator):
+    Bash uses IFS to split strings into words. Default: space, tab, newline.
+    Set IFS=: to split on colons (useful for /etc/passwd-style files).
+    Always restore IFS after changing it, or scope it with a subshell.
+
+Files You'll Create:
+  • /tmp/lab23a/scripts/greet.sh       - Uses $1, $2 with validation
+  • /tmp/lab23a/scripts/dispatch.sh    - Uses case for multi-branch logic
+  • /tmp/lab23a/scripts/parse-users.sh - Uses while read + IFS to parse CSV
+  • /tmp/lab23a/scripts/deploy.sh      - Sources a config file
 EOF
 }
 
@@ -93,36 +100,52 @@ EOF
 scenario() {
     cat << 'EOF'
 SCENARIO:
-You're automating common system administration tasks. Manual operations
-don't scale - you need to script routine maintenance, bulk operations,
-and conditional logic to handle different situations.
+The team's bash scripts are all hardcoded with fixed paths and usernames.
+You need to refactor them to accept arguments at runtime, use sourced config
+files for site-specific values, parse structured data files cleanly, and
+use case statements to handle multiple command modes in a single script.
 
 BACKGROUND:
-Bash scripts are the most common automation tool in Linux. Unlike
-compiled programs, they're easy to write, modify, and debug. They're
-perfect for tasks like:
-  • Processing lists of servers or users
-  • Checking system conditions and taking action
-  • Batch file operations
-  • Log processing and reporting
-  • Conditional deployments
+These four patterns appear constantly in real RHCSA exam scripts and
+production automation: accepting and validating arguments, dispatching
+to sub-functions via case, parsing colon- or CSV-delimited files with
+while read, and sourcing shared config rather than duplicating values.
 
+OBJECTIVES:
+  1. Write greet.sh — accepts a name ($1) and optional title ($2). If no
+     name is given, print a usage message and exit 1. Otherwise print:
+     "Hello, [title] [name]!" (title defaults to "User" if not provided).
+     Validate: the script must exit 1 when called with no arguments.
 
+  2. Write dispatch.sh — accepts one argument (start|stop|status|restart).
+     Use a case statement to print a different message for each. For any
+     other value print "Unknown command: $1" and exit 1.
+     The default (*) case must exit 1.
+
+  3. Write parse-users.sh — reads /tmp/lab23a/users.csv line by line using
+     while read with IFS=: splitting each line into three variables
+     (username, group, shell). For each user, append a line to
+     /tmp/lab23a/output/user-report.txt in this format:
+     "User: alice | Group: developers | Shell: bash"
+
+  4. Write deploy.sh — sources /tmp/lab23a/config/deploy.conf to load its
+     variables, then uses those variables to:
+     - Create $DEPLOY_DIR
+     - Write "Deployed $APP_NAME at $(date)" to $LOG_FILE
+     Validate: $DEPLOY_DIR must exist and $LOG_FILE must contain "Deployed".
 
 HINTS:
-  • Always quote variables in tests: [ "$var" = "value" ]
-  • Use [[ ]] for pattern matching: [[ $file == *.txt ]]
-  • Check exit codes: if command; then ... fi
-  • Test scripts with echo before making changes
-  • Use ; to put loops on one line for interactive testing
+  • [ -z "$1" ] tests if $1 is empty (no argument given)
+  • case $1 in start) ... ;; stop) ... ;; *) ... ;; esac
+  • while IFS=: read user group shell; do ... done < file
+  • source /path/to/file  OR  . /path/to/file — both work on the exam
+  • After sourcing, $APP_NAME, $DEPLOY_DIR etc. are available as normal vars
 
 SUCCESS CRITERIA:
-  • You can write for-loops to process lists
-  • You understand while-loop patterns
-  • You can write if-then-else logic
-  • You know which test operators to use when
-  • You can chain commands for error handling
-  • You've created working automation scripts
+  • greet.sh exits 1 with no args; prints greeting with $1 and optional $2
+  • dispatch.sh handles start/stop/status/restart and exits 1 for unknown
+  • /tmp/lab23a/output/user-report.txt has 4 lines, one per user in the CSV
+  • $DEPLOY_DIR exists and $LOG_FILE contains "Deployed"
 EOF
 }
 
@@ -131,93 +154,96 @@ EOF
 #############################################################################
 objectives_quick() {
     cat << 'EOF'
-  ☐ 1. Write for-loop to process server list
-  ☐ 2. Create while-loop with counter
-  ☐ 3. Build if-else script to check file sizes
-  ☐ 4. Use test operators for file validation
-  ☐ 5. Chain commands with && and ||
-  ☐ 6. Create backup script with timestamp
+  ☐ 1. greet.sh — validate $1 exists; print "Hello, ${2:-User} $1!"; exit 1 if no args
+  ☐ 2. dispatch.sh — case $1 in start|stop|status|restart with * exit 1 default
+  ☐ 3. parse-users.sh — while IFS=: read user group shell; output user-report.txt
+  ☐ 4. deploy.sh — source deploy.conf; mkdir $DEPLOY_DIR; write to $LOG_FILE
 EOF
 }
 
 #############################################################################
 # INTERACTIVE MODE
 #############################################################################
-
 get_step_count() {
-    echo "6"
+    echo "4"
 }
 
 scenario_context() {
     cat << 'EOF'
-You're automating system administration tasks using bash scripts. You'll
-learn loops, conditionals, and command chaining to build practical
-automation tools.
+You need to refactor a set of hardcoded scripts to accept arguments,
+use sourced config files, parse structured data, and handle multiple
+operating modes through a case statement.
 EOF
 }
 
-# STEP 1: Basic for-loop
+# STEP 1: Positional parameters with validation
 show_step_1() {
     cat << 'EOF'
-TASK: Create a script that loops through servers and generates reports
-
-Write a script that reads /tmp/script-lab/data/servers.txt and creates
-a status file for each server.
+TASK: Write greet.sh using positional parameters and argument validation
 
 Requirements:
-  • Script location: /tmp/script-lab/scripts/server-check.sh
-  • For each server in servers.txt:
-    - Create file: /tmp/script-lab/logs/${server}-status.txt
-    - Content: "Checking ${server} at $(date)"
-  • Make the script executable
-  • Run it to generate the log files
+  • Script: /tmp/lab23a/scripts/greet.sh
+  • If called with no arguments: print "Usage: greet.sh <name> [title]" and exit 1
+  • If called with one argument ($1 = name): print "Hello, User alice!"
+  • If called with two arguments ($1 = name, $2 = title): print "Hello, Dr alice!"
+  • Make executable, then test:
+      /tmp/lab23a/scripts/greet.sh              # should exit 1
+      /tmp/lab23a/scripts/greet.sh alice        # Hello, User alice!
+      /tmp/lab23a/scripts/greet.sh alice Dr     # Hello, Dr alice!
 
-Commands you'll need:
-  • for var in $(cat file)
-  • touch or echo > to create files
-  • chmod +x to make executable
+Key variables:
+  $1   first argument       $#   argument count
+  $2   second argument      $0   script name
 
-For-loop syntax:
-  for item in list; do
-      commands
-  done
-
-One-line version:
-  for item in list; do command; done
-
-What you're learning:
-  For-loops let you process lists efficiently. This pattern appears
-  constantly in system administration - processing servers, users,
-  files, or any collection of items.
+Default value syntax (no if needed):
+  ${2:-User}   means: use $2 if set and non-empty, otherwise use "User"
 EOF
 }
 
 validate_step_1() {
-    if [ ! -f "/tmp/script-lab/scripts/server-check.sh" ]; then
+    local script="/tmp/lab23a/scripts/greet.sh"
+
+    if [ ! -f "$script" ]; then
         echo ""
-        print_color "$RED" "✗ Script /tmp/script-lab/scripts/server-check.sh not found"
-        echo "  Create the script file first"
+        print_color "$RED" "✗ /tmp/lab23a/scripts/greet.sh not found"
         return 1
     fi
-    
-    if [ ! -x "/tmp/script-lab/scripts/server-check.sh" ]; then
+
+    if [ ! -x "$script" ]; then
         echo ""
-        print_color "$RED" "✗ Script exists but is not executable"
-        echo "  Run: chmod +x /tmp/script-lab/scripts/server-check.sh"
+        print_color "$RED" "✗ Script is not executable"
+        echo "  Fix: chmod +x $script"
         return 1
     fi
-    
-    # Check if log files were created
-    local server_count=$(wc -l < /tmp/script-lab/data/servers.txt)
-    local log_count=$(ls /tmp/script-lab/logs/*-status.txt 2>/dev/null | wc -l)
-    
-    if [ "$log_count" -lt "$server_count" ]; then
+
+    # Test: no arguments should exit 1
+    "$script" >/dev/null 2>&1
+    if [ $? -eq 0 ]; then
         echo ""
-        print_color "$RED" "✗ Expected $server_count log files, found $log_count"
-        echo "  Run the script to generate logs"
+        print_color "$RED" "✗ Script should exit 1 when called with no arguments, but it exited 0"
+        echo "  Add: [ -z \"\$1\" ] && { echo \"Usage: ...\"; exit 1; }"
         return 1
     fi
-    
+
+    # Test: one argument should produce output containing the name
+    local output
+    output=$("$script" alice 2>/dev/null)
+    if ! echo "$output" | grep -q "alice"; then
+        echo ""
+        print_color "$RED" "✗ Script with one argument does not include the name in output"
+        echo "  Output was: '$output'"
+        return 1
+    fi
+
+    # Test: two arguments should include both name and title
+    output=$("$script" alice Dr 2>/dev/null)
+    if ! echo "$output" | grep -q "alice" || ! echo "$output" | grep -q "Dr"; then
+        echo ""
+        print_color "$RED" "✗ Script with two arguments does not include both name and title"
+        echo "  Output was: '$output'"
+        return 1
+    fi
+
     return 0
 }
 
@@ -226,148 +252,130 @@ solution_step_1() {
 
 SOLUTION:
 ─────────
-Create the script:
-
-cat > /tmp/script-lab/scripts/server-check.sh << 'SCRIPT'
+cat > /tmp/lab23a/scripts/greet.sh << 'SCRIPT'
 #!/bin/bash
-# Server status checker
+if [ -z "$1" ]; then
+    echo "Usage: $(basename $0) <name> [title]"
+    exit 1
+fi
 
-for server in $(cat /tmp/script-lab/data/servers.txt); do
-    echo "Checking $server at $(date)" > /tmp/script-lab/logs/${server}-status.txt
-done
+NAME="$1"
+TITLE="${2:-User}"
 
-echo "Generated status files for all servers"
+echo "Hello, ${TITLE} ${NAME}!"
 SCRIPT
 
-Make it executable and run:
-  chmod +x /tmp/script-lab/scripts/server-check.sh
-  /tmp/script-lab/scripts/server-check.sh
+chmod +x /tmp/lab23a/scripts/greet.sh
 
-Breaking it down:
-  • #!/bin/bash
-    - Shebang line - tells system which interpreter to use
-    - Required for scripts to be executable
-  
-  • for server in $(cat file)
-    - $(cat file) outputs the file contents
-    - for iterates over each line
-    - Variable 'server' holds current value
-  
-  • do ... done
-    - Encloses the loop body
-    - All commands between do/done execute for each item
-  
-  • echo "text" > file
-    - Creates/overwrites file with content
-    - ${server} expands to current loop value
-    - $(date) executes date command
+# Test it:
+/tmp/lab23a/scripts/greet.sh              # exits 1, prints usage
+echo "Exit code: $?"                      # → 1
+/tmp/lab23a/scripts/greet.sh alice        # → Hello, User alice!
+/tmp/lab23a/scripts/greet.sh alice Dr     # → Hello, Dr alice!
 
-For-loop variations:
-  # Simple list:
-  for color in red blue green; do
-      echo $color
-  done
-  
-  # Numeric range:
-  for i in {1..10}; do
-      echo "Count: $i"
-  done
-  
-  # Files in directory:
-  for file in *.txt; do
-      echo "Processing $file"
-  done
-  
-  # Command output:
-  for user in $(cut -d: -f1 /etc/passwd); do
-      echo "User: $user"
-  done
+Key concepts:
 
-Why quote variables?
-  for server in $(cat file); do
-      echo "$server"     # SAFE: preserves spaces
-      echo $server       # RISKY: word splitting occurs
-  done
+  [ -z "$1" ]: -z tests if a string is ZERO length (empty).
+    If no argument was given, $1 is empty/unset → -z is true → print usage.
+    Always quote: [ -z "$1" ] not [ -z $1 ] (unquoted fails if $1 is unset)
 
-Alternative: read in while loop (better for lines with spaces):
-  while read -r server; do
-      echo "Checking $server"
-  done < /tmp/script-lab/data/servers.txt
+  $(basename $0): $0 is the script's name including path. basename strips
+    the path so the usage message shows just the filename, not the full path.
+
+  ${2:-User}: parameter expansion with default value.
+    If $2 is unset or empty → substitute "User"
+    If $2 has a value → use that value
+    Other useful forms:
+      ${VAR:-default}    use default if VAR unset or empty
+      ${VAR:=default}    set VAR to default if unset or empty (modifies VAR)
+      ${VAR:?message}    exit with message if VAR unset or empty
+      ${VAR:+other}      use 'other' if VAR IS set (inverse of :-)
+
+  exit 1: terminates the script immediately with exit code 1.
+    The calling shell or script can test this: if ./greet.sh; then ...
 
 Verification:
-  ls -l /tmp/script-lab/logs/
-  # Should show: web1-status.txt, web2-status.txt, etc.
-  
-  cat /tmp/script-lab/logs/web1-status.txt
-  # Should show: Checking web1 at [timestamp]
+  /tmp/lab23a/scripts/greet.sh; echo $?           # should print 1
+  /tmp/lab23a/scripts/greet.sh alice; echo $?     # should print 0
 
 EOF
 }
 
 hint_step_2() {
-    echo "  Use: i=1; while [ \$i -le 5 ]; do ...; i=\$((i+1)); done"
+    echo "  case \$1 in"
+    echo "    start)  echo 'Starting...' ;;"
+    echo "    stop)   echo 'Stopping...' ;;"
+    echo "    *)      echo \"Unknown: \$1\"; exit 1 ;;"
+    echo "  esac"
 }
 
-# STEP 2: While loop with counter
+# STEP 2: case statement
 show_step_2() {
     cat << 'EOF'
-TASK: Create a countdown timer script using a while loop
-
-Write a script that counts down from 5 to 1, creating a file for
-each number.
+TASK: Write dispatch.sh using a case statement
 
 Requirements:
-  • Script location: /tmp/script-lab/scripts/countdown.sh
-  • Start with COUNTER=5
-  • While COUNTER is greater than 0:
-    - Create file: /tmp/script-lab/logs/count-${COUNTER}.txt
-    - Decrement counter
-  • Make executable and run
+  • Script: /tmp/lab23a/scripts/dispatch.sh
+  • Accepts one argument: start | stop | status | restart
+  • Print a different message for each valid option
+  • For any other value (including no argument): print "Unknown command: $1"
+    and exit 1
+  • Make executable and test all four valid options plus one invalid one
 
-While-loop syntax:
-  while condition; do
-      commands
-  done
+case syntax:
+  case $variable in
+      pattern1)
+          commands
+          ;;
+      pattern2|pattern3)    # pipe = OR
+          commands
+          ;;
+      *)                    # default (catch-all)
+          commands
+          ;;
+  esac
 
-Counter pattern:
-  i=1
-  while [ $i -le 10 ]; do
-      echo $i
-      i=$((i + 1))
-  done
-
-What you're learning:
-  While loops continue until a condition becomes false. They're perfect
-  for counted iterations, reading files, or waiting for conditions.
+Why case over if-elif:
+  case is cleaner and faster when matching one variable against many fixed
+  values. if-elif works but becomes hard to read beyond 3-4 branches.
+  case also supports glob patterns: case $file in *.txt) ... ;; esac
 EOF
 }
 
 validate_step_2() {
-    if [ ! -f "/tmp/script-lab/scripts/countdown.sh" ]; then
+    local script="/tmp/lab23a/scripts/dispatch.sh"
+
+    if [ ! -f "$script" ]; then
         echo ""
-        print_color "$RED" "✗ Script /tmp/script-lab/scripts/countdown.sh not found"
+        print_color "$RED" "✗ /tmp/lab23a/scripts/dispatch.sh not found"
         return 1
     fi
-    
-    if [ ! -x "/tmp/script-lab/scripts/countdown.sh" ]; then
+
+    if [ ! -x "$script" ]; then
         echo ""
         print_color "$RED" "✗ Script is not executable"
         return 1
     fi
-    
-    # Check if countdown files were created (5 down to 1)
-    local count_files=0
-    for i in {1..5}; do
-        [ -f "/tmp/script-lab/logs/count-$i.txt" ] && ((count_files++))
+
+    # Valid commands should exit 0
+    for cmd in start stop status restart; do
+        "$script" "$cmd" >/dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            echo ""
+            print_color "$RED" "✗ dispatch.sh '$cmd' should exit 0, but exited non-zero"
+            return 1
+        fi
     done
-    
-    if [ "$count_files" -ne 5 ]; then
+
+    # Invalid command should exit 1
+    "$script" bogus >/dev/null 2>&1
+    if [ $? -eq 0 ]; then
         echo ""
-        print_color "$RED" "✗ Expected 5 count files (count-1.txt through count-5.txt), found $count_files"
-        echo "  Run the script to generate files"
+        print_color "$RED" "✗ dispatch.sh with unknown command should exit 1, but exited 0"
+        echo "  Add 'exit 1' to the *) default case"
         return 1
     fi
-    
+
     return 0
 }
 
@@ -376,162 +384,145 @@ solution_step_2() {
 
 SOLUTION:
 ─────────
-Create the script:
-
-cat > /tmp/script-lab/scripts/countdown.sh << 'SCRIPT'
+cat > /tmp/lab23a/scripts/dispatch.sh << 'SCRIPT'
 #!/bin/bash
-# Countdown timer
-
-COUNTER=5
-
-while [ $COUNTER -gt 0 ]; do
-    echo "Count: $COUNTER" > /tmp/script-lab/logs/count-${COUNTER}.txt
-    COUNTER=$((COUNTER - 1))
-done
-
-echo "Countdown complete"
+case $1 in
+    start)
+        echo "Starting service..."
+        ;;
+    stop)
+        echo "Stopping service..."
+        ;;
+    status)
+        echo "Service is running"
+        ;;
+    restart)
+        echo "Restarting service..."
+        ;;
+    *)
+        echo "Unknown command: $1"
+        echo "Usage: $(basename $0) {start|stop|status|restart}"
+        exit 1
+        ;;
+esac
 SCRIPT
 
-chmod +x /tmp/script-lab/scripts/countdown.sh
-/tmp/script-lab/scripts/countdown.sh
+chmod +x /tmp/lab23a/scripts/dispatch.sh
 
-Breaking it down:
-  • COUNTER=5
-    - Initialize counter variable
-  
-  • while [ $COUNTER -gt 0 ]
-    - Test if COUNTER is greater than 0
-    - Loop continues while this is true
-  
-  • [ $COUNTER -gt 0 ]
-    - Test operator: -gt means "greater than"
-    - Returns exit code 0 (true) or 1 (false)
-  
-  • COUNTER=$((COUNTER - 1))
-    - Arithmetic expansion: $(( expression ))
-    - Decrements the counter
-    - Alternative: ((COUNTER--))
+# Test:
+/tmp/lab23a/scripts/dispatch.sh start
+/tmp/lab23a/scripts/dispatch.sh bogus; echo $?   # → exits 1
 
-While loop patterns:
-  # Count up:
-  i=1
-  while [ $i -le 10 ]; do
-      echo $i
-      i=$((i + 1))
-  done
-  
-  # Read file line by line:
-  while read -r line; do
-      echo "Line: $line"
-  done < file.txt
-  
-  # Infinite loop with break:
-  while true; do
-      read -p "Enter 'quit' to exit: " input
-      [ "$input" = "quit" ] && break
-  done
-  
-  # Wait for condition:
-  while ! ping -c1 server >/dev/null 2>&1; do
-      echo "Waiting for server..."
-      sleep 1
-  done
+Key concepts:
 
-Arithmetic operations:
-  # Arithmetic expansion:
-  result=$((5 + 3))        # Addition
-  result=$((10 - 4))       # Subtraction
-  result=$((6 * 7))        # Multiplication
-  result=$((20 / 5))       # Division
-  result=$((17 % 5))       # Modulo (remainder)
-  
-  # Increment/decrement:
-  i=$((i + 1))
-  i=$((i++))               # Post-increment
-  i=$((++i))               # Pre-increment
-  ((i++))                  # Alternative syntax
+  Pattern syntax:
+    start)     exact match
+    start|stop) matches either — | means OR inside case patterns
+    *.txt)     glob pattern — matches any value ending in .txt
+    [Yy]es)    character class — matches "Yes" or "yes"
+    *)         matches everything — always put this last
 
-Test operators for numbers:
-  -eq    equal to
-  -ne    not equal to
-  -lt    less than
-  -le    less than or equal
-  -gt    greater than
-  -ge    greater than or equal
+  ;; terminates each branch. Forgetting ;; causes bash to fall through
+  into the next branch (unlike C's switch, bash does NOT fall through
+  by default — ;; prevents it, but missing it causes a parse error).
+
+  case does not require break (unlike C). Each branch ends at ;;.
+
+  Real-world case pattern — script mode dispatch:
+    case $1 in
+        -h|--help)    show_help ;;
+        -v|--verbose) VERBOSE=1 ;;
+        -f|--file)    FILE="$2"; shift ;;  # shift consumes $2
+        *)            echo "Unknown option"; exit 1 ;;
+    esac
+
+  shift: discards $1 and shifts all other parameters left.
+    Before shift: $1="-f" $2="file.txt" $3="other"
+    After shift:  $1="file.txt" $2="other"
+    Useful for option parsing in loops.
 
 Verification:
-  ls -l /tmp/script-lab/logs/count-*.txt
-  # Should show: count-1.txt through count-5.txt
+  for cmd in start stop status restart bogus; do
+      echo -n "$cmd: "
+      /tmp/lab23a/scripts/dispatch.sh "$cmd"
+  done
 
 EOF
 }
 
 hint_step_3() {
-    echo "  Use [ -f file ] to test if file exists, stat -c%s for file size"
+    echo "  while IFS=: read user group shell; do"
+    echo "    echo \"User: \$user | Group: \$group | Shell: \$shell\""
+    echo "  done < /tmp/lab23a/users.csv"
 }
 
-# STEP 3: If-else with file tests
+# STEP 3: while read with IFS
 show_step_3() {
     cat << 'EOF'
-TASK: Create a script that categorizes files by size
+TASK: Parse a colon-delimited CSV using while read with IFS
 
-Write a script that checks each .dat file in /tmp/script-lab/data/
-and categorizes it as small, medium, or large based on size.
+The file /tmp/lab23a/users.csv has this format:
+  alice:developers:bash
+  bob:sysadmin:zsh
 
 Requirements:
-  • Script: /tmp/script-lab/scripts/size-check.sh
-  • For each .dat file:
-    - If size < 100KB: echo "small" > logs/${filename}-category.txt
-    - If size < 10MB: echo "medium" > logs/${filename}-category.txt
-    - Otherwise: echo "large" > logs/${filename}-category.txt
-  • Use stat -c%s to get file size in bytes
+  • Script: /tmp/lab23a/scripts/parse-users.sh
+  • Read each line and split on ':' using IFS
+  • Assign fields to variables: username, group, shell
+  • Append one formatted line per user to /tmp/lab23a/output/user-report.txt:
+    "User: alice | Group: developers | Shell: bash"
+  • Clear the output file at the start of each run
 
-If-else syntax:
-  if condition; then
-      commands
-  elif condition; then
-      commands
-  else
-      commands
-  fi
+while read with IFS syntax:
+  while IFS=: read username group shell; do
+      echo "$username $group $shell"
+  done < /tmp/lab23a/users.csv
 
-What you're learning:
-  Conditional logic lets scripts make decisions. Combined with file
-  tests and comparisons, you can handle different scenarios intelligently.
+Why while read instead of for:
+  for line in $(cat file): splits on ALL whitespace — breaks on spaces in values
+  while read -r line: reads one complete line at a time — handles spaces safely
+  -r flag: prevents backslash from being treated as an escape character
 EOF
 }
 
 validate_step_3() {
-    if [ ! -f "/tmp/script-lab/scripts/size-check.sh" ]; then
+    local script="/tmp/lab23a/scripts/parse-users.sh"
+
+    if [ ! -f "$script" ]; then
         echo ""
-        print_color "$RED" "✗ Script /tmp/script-lab/scripts/size-check.sh not found"
+        print_color "$RED" "✗ /tmp/lab23a/scripts/parse-users.sh not found"
         return 1
     fi
-    
-    if [ ! -x "/tmp/script-lab/scripts/size-check.sh" ]; then
+
+    if [ ! -x "$script" ]; then
         echo ""
         print_color "$RED" "✗ Script is not executable"
         return 1
     fi
-    
-    # Check if category files were created
-    local cat_count=$(ls /tmp/script-lab/logs/*-category.txt 2>/dev/null | wc -l)
-    if [ "$cat_count" -lt 3 ]; then
+
+    if [ ! -f "/tmp/lab23a/output/user-report.txt" ]; then
         echo ""
-        print_color "$RED" "✗ Expected 3 category files, found $cat_count"
-        echo "  Run the script to categorize files"
+        print_color "$RED" "✗ /tmp/lab23a/output/user-report.txt not created — run the script"
         return 1
     fi
-    
-    # Validate small.dat is categorized as small
-    if [ -f "/tmp/script-lab/logs/small.dat-category.txt" ]; then
-        if ! grep -q "small" /tmp/script-lab/logs/small.dat-category.txt 2>/dev/null; then
+
+    local line_count
+    line_count=$(wc -l < /tmp/lab23a/output/user-report.txt)
+    if [ "$line_count" -lt 4 ]; then
+        echo ""
+        print_color "$RED" "✗ user-report.txt has $line_count lines (expected 4, one per user)"
+        return 1
+    fi
+
+    # Check that all four usernames appear in the report
+    for user in alice bob charlie diana; do
+        if ! grep -q "$user" /tmp/lab23a/output/user-report.txt; then
             echo ""
-            print_color "$RED" "✗ small.dat not categorized correctly"
+            print_color "$RED" "✗ '$user' not found in user-report.txt"
             return 1
         fi
-    fi
-    
+    done
+
     return 0
 }
 
@@ -540,213 +531,144 @@ solution_step_3() {
 
 SOLUTION:
 ─────────
-Create the script:
-
-cat > /tmp/script-lab/scripts/size-check.sh << 'SCRIPT'
+cat > /tmp/lab23a/scripts/parse-users.sh << 'SCRIPT'
 #!/bin/bash
-# File size categorizer
+OUTPUT="/tmp/lab23a/output/user-report.txt"
 
-for file in /tmp/script-lab/data/*.dat; do
-    # Get filename without path
-    filename=$(basename "$file")
-    
-    # Get file size in bytes
-    size=$(stat -c%s "$file")
-    
-    # Categorize by size
-    if [ $size -lt 102400 ]; then
-        # Less than 100KB
-        category="small"
-    elif [ $size -lt 10485760 ]; then
-        # Less than 10MB
-        category="medium"
-    else
-        category="large"
-    fi
-    
-    echo "$category" > /tmp/script-lab/logs/${filename}-category.txt
-    echo "$filename: $category ($size bytes)"
-done
+# Clear output file
+> "$OUTPUT"
+
+while IFS=: read -r username group shell; do
+    echo "User: $username | Group: $group | Shell: $shell" >> "$OUTPUT"
+done < /tmp/lab23a/users.csv
+
+echo "Report written to $OUTPUT"
+cat "$OUTPUT"
 SCRIPT
 
-chmod +x /tmp/script-lab/scripts/size-check.sh
-/tmp/script-lab/scripts/size-check.sh
+chmod +x /tmp/lab23a/scripts/parse-users.sh
+/tmp/lab23a/scripts/parse-users.sh
 
-Breaking it down:
-  • for file in *.dat
-    - Glob expands to all .dat files
-    - Processes each file in turn
-  
-  • filename=$(basename "$file")
-    - Strips directory path
-    - /tmp/script-lab/data/small.dat becomes small.dat
-  
-  • size=$(stat -c%s "$file")
-    - stat command gets file info
-    - -c%s outputs size in bytes
-    - Stored in size variable
-  
-  • if [ $size -lt 102400 ]
-    - Compare size to 100KB (100 * 1024 = 102400)
-    - -lt means "less than"
-  
-  • elif [ $size -lt 10485760 ]
-    - "else if" - checked if first condition was false
-    - 10MB = 10 * 1024 * 1024 = 10485760 bytes
-  
-  • else
-    - Catches everything else (larger than 10MB)
+Key concepts:
 
-If-statement variations:
-  # Simple if:
-  if [ -f /etc/passwd ]; then
-      echo "File exists"
-  fi
-  
-  # If-else:
-  if [ $count -gt 10 ]; then
-      echo "More than 10"
-  else
-      echo "10 or less"
-  fi
-  
-  # If-elif-else:
-  if [ "$status" = "active" ]; then
-      echo "Running"
-  elif [ "$status" = "stopped" ]; then
-      echo "Not running"
-  else
-      echo "Unknown status"
-  fi
+  IFS=: before read: sets the field separator to colon for this read
+    command only. The assignment is scoped to the command — IFS reverts
+    after each iteration. This is safer than setting IFS globally.
 
-File test operators:
-  -f file    file exists and is regular file
-  -d dir     directory exists
-  -e path    path exists (file or directory)
-  -r file    file exists and is readable
-  -w file    file exists and is writable
-  -x file    file exists and is executable
-  -s file    file exists and has size > 0
-  -L link    path is a symbolic link
+    Alternative (global, requires restore):
+      OLD_IFS=$IFS
+      IFS=:
+      while read user group shell; do ...; done < file
+      IFS=$OLD_IFS
 
-Numeric comparison operators:
-  -eq    equal
-  -ne    not equal
-  -lt    less than
-  -le    less than or equal
-  -gt    greater than
-  -ge    greater than or equal
+  -r flag: without -r, a backslash at the end of a line is treated as
+    a continuation character and the next line is appended. -r treats
+    backslashes as literal characters. Always use -r unless you
+    specifically need backslash continuation.
 
-String comparison:
-  =      equal
-  !=     not equal
-  -z     string is empty
-  -n     string is not empty
+  < file redirection to while: the while loop reads from the file via
+    stdin redirection. This keeps the loop in the current shell, so
+    variables set inside the loop are visible after it. Contrast with:
+    cat file | while read ...; done  — this creates a subshell for the
+    while body, and any variables you set inside vanish afterward.
 
-Logical operators:
-  -a     AND (both conditions true)
-  -o     OR (either condition true)
-  !      NOT (invert condition)
+  Parsing /etc/passwd the same way:
+    while IFS=: read user pass uid gid gecos home shell; do
+        echo "$user uses $shell"
+    done < /etc/passwd
 
-Example combinations:
-  # File exists AND is readable:
-  if [ -f "$file" -a -r "$file" ]; then
-      cat "$file"
-  fi
-  
-  # Either condition:
-  if [ "$user" = "root" -o "$user" = "admin" ]; then
-      echo "Privileged user"
-  fi
-  
-  # NOT condition:
-  if [ ! -f "$file" ]; then
-      echo "File does not exist"
-  fi
-
-Modern [[ ]] syntax (preferred in bash):
-  # Pattern matching:
-  if [[ $file == *.txt ]]; then
-      echo "Text file"
-  fi
-  
-  # Regex matching:
-  if [[ $string =~ ^[0-9]+$ ]]; then
-      echo "Number"
-  fi
-  
-  # Safer with spaces:
-  if [[ $var == "value with spaces" ]]; then
-      echo "Match"
-  fi
+  Process substitution alternative (avoids subshell issue with pipes):
+    while read line; do
+        echo "$line"
+    done < <(command_that_produces_output)
 
 Verification:
-  ls -l /tmp/script-lab/logs/*-category.txt
-  cat /tmp/script-lab/logs/*.dat-category.txt
+  cat /tmp/lab23a/output/user-report.txt
+  wc -l /tmp/lab23a/output/user-report.txt   # should be 4
 
 EOF
 }
 
 hint_step_4() {
-    echo "  Chain with &&: mkdir dir && cd dir && touch file"
+    echo "  source /tmp/lab23a/config/deploy.conf  (or: . /tmp/lab23a/config/deploy.conf)"
+    echo "  After sourcing, \$APP_NAME, \$DEPLOY_DIR, \$LOG_FILE are available"
 }
 
-# STEP 4: Command chaining
+# STEP 4: source / .
 show_step_4() {
     cat << 'EOF'
-TASK: Use command chaining for error handling
+TASK: Write deploy.sh that sources a config file and uses its variables
 
-Create a script that safely creates a backup directory structure,
-handling errors at each step.
+The config file /tmp/lab23a/config/deploy.conf defines:
+  APP_NAME="myapp"
+  DEPLOY_DIR="/tmp/lab23a/output/deploy"
+  LOG_FILE="/tmp/lab23a/output/deploy.log"
+  MAX_BACKUPS=3
 
 Requirements:
-  • Script: /tmp/script-lab/scripts/safe-backup.sh
-  • Create /tmp/script-lab/backups directory (if missing)
-  • AND create subdirectory: backups/$(date +%Y-%m-%d)
-  • AND create a file: backups/$(date +%Y-%m-%d)/backup.log
-  • Use && to chain commands
-  • If any step fails, subsequent steps don't run
+  • Script: /tmp/lab23a/scripts/deploy.sh
+  • Source the config file at the top of the script
+  • Use $DEPLOY_DIR, $APP_NAME, and $LOG_FILE — do NOT hardcode these paths
+  • Create $DEPLOY_DIR (mkdir -p)
+  • Write "Deployed $APP_NAME at $(date)" to $LOG_FILE
+  • Print a summary showing which variables were loaded from config
 
-Command chaining:
-  command1 && command2      # Run cmd2 only if cmd1 succeeds
-  command1 || command2      # Run cmd2 only if cmd1 fails
-  command1 ; command2       # Run cmd2 regardless
+source syntax:
+  source /path/to/file.conf   # bash spelling
+  . /path/to/file.conf        # POSIX spelling — identical behavior
 
-What you're learning:
-  Exit codes determine success (0) or failure (non-zero). Command
-  chaining uses these codes for flow control without if statements.
+Both execute the file in the CURRENT shell, making its variables available
+to the rest of the script. Running ./file.conf or bash file.conf would
+execute it in a subshell — its variables would disappear immediately.
 EOF
 }
 
 validate_step_4() {
-    if [ ! -f "/tmp/script-lab/scripts/safe-backup.sh" ]; then
+    local script="/tmp/lab23a/scripts/deploy.sh"
+
+    if [ ! -f "$script" ]; then
         echo ""
-        print_color "$RED" "✗ Script not found"
+        print_color "$RED" "✗ /tmp/lab23a/scripts/deploy.sh not found"
         return 1
     fi
-    
-    if [ ! -x "/tmp/script-lab/scripts/safe-backup.sh" ]; then
+
+    if [ ! -x "$script" ]; then
         echo ""
         print_color "$RED" "✗ Script is not executable"
         return 1
     fi
-    
-    # Check if directories were created
-    if [ ! -d "/tmp/script-lab/backups" ]; then
+
+    # Run the script to generate output
+    "$script" >/dev/null 2>&1
+
+    if [ ! -d "/tmp/lab23a/output/deploy" ]; then
         echo ""
-        print_color "$RED" "✗ Backup directory not created"
-        echo "  Run the script"
+        print_color "$RED" "✗ \$DEPLOY_DIR (/tmp/lab23a/output/deploy) was not created"
+        echo "  Check that you sourced deploy.conf and used \$DEPLOY_DIR"
         return 1
     fi
-    
-    # Check if a dated subdirectory exists
-    local dated_dir_count=$(find /tmp/script-lab/backups -maxdepth 1 -type d -name "????-??-??" 2>/dev/null | wc -l)
-    if [ "$dated_dir_count" -lt 1 ]; then
+
+    if [ ! -f "/tmp/lab23a/output/deploy.log" ]; then
         echo ""
-        print_color "$RED" "✗ Dated backup directory not created"
+        print_color "$RED" "✗ \$LOG_FILE (/tmp/lab23a/output/deploy.log) was not created"
         return 1
     fi
-    
+
+    if ! grep -q "Deployed" /tmp/lab23a/output/deploy.log; then
+        echo ""
+        print_color "$RED" "✗ /tmp/lab23a/output/deploy.log does not contain 'Deployed'"
+        echo "  Contents: $(cat /tmp/lab23a/output/deploy.log 2>/dev/null)"
+        return 1
+    fi
+
+    # Check the script actually uses source (not hardcoded paths)
+    if ! grep -qE "^(source|\.) " "$script"; then
+        echo ""
+        print_color "$RED" "✗ Script does not appear to use 'source' or '.' to load config"
+        echo "  Add: source /tmp/lab23a/config/deploy.conf"
+        return 1
+    fi
+
     return 0
 }
 
@@ -755,605 +677,62 @@ solution_step_4() {
 
 SOLUTION:
 ─────────
-Create the script:
-
-cat > /tmp/script-lab/scripts/safe-backup.sh << 'SCRIPT'
+cat > /tmp/lab23a/scripts/deploy.sh << 'SCRIPT'
 #!/bin/bash
-# Safe backup directory creator
+CONFIG="/tmp/lab23a/config/deploy.conf"
 
-mkdir -p /tmp/script-lab/backups && \
-cd /tmp/script-lab/backups && \
-mkdir $(date +%Y-%m-%d) && \
-touch $(date +%Y-%m-%d)/backup.log && \
-echo "Backup structure created successfully" || \
-echo "Error creating backup structure"
+# Verify config exists before sourcing
+if [ ! -f "$CONFIG" ]; then
+    echo "ERROR: Config file not found: $CONFIG"
+    exit 1
+fi
+
+# Source the config — loads APP_NAME, DEPLOY_DIR, LOG_FILE, MAX_BACKUPS
+source "$CONFIG"
+
+# Use the sourced variables
+mkdir -p "$DEPLOY_DIR"
+echo "Deployed $APP_NAME at $(date)" >> "$LOG_FILE"
+
+echo "Deploy summary:"
+echo "  App:        $APP_NAME"
+echo "  Deploy dir: $DEPLOY_DIR"
+echo "  Log file:   $LOG_FILE"
+echo "  Max backups: $MAX_BACKUPS"
 SCRIPT
 
-chmod +x /tmp/script-lab/scripts/safe-backup.sh
-/tmp/script-lab/scripts/safe-backup.sh
-
-Breaking it down:
-  • mkdir -p /tmp/script-lab/backups
-    - Create directory (and parents if needed)
-    - -p prevents error if already exists
-  
-  • &&
-    - "AND" operator
-    - Runs next command ONLY if previous succeeded (exit code 0)
-    - If previous failed, chain stops
-  
-  • cd /tmp/script-lab/backups
-    - Only runs if mkdir succeeded
-    - Changes to backup directory
-  
-  • mkdir $(date +%Y-%m-%d)
-    - $(date +%Y-%m-%d) outputs: 2025-01-13
-    - Creates directory with today's date
-    - Only runs if cd succeeded
-  
-  • ||
-    - "OR" operator
-    - Runs if previous command FAILED
-    - Used for error messages
-  
-  • \
-    - Line continuation
-    - Makes long command chains readable
-
-Command chaining patterns:
-  # Simple success chain:
-  command1 && command2 && command3
-  # Each only runs if previous succeeded
-  
-  # Error handling:
-  command || echo "Command failed"
-  
-  # Both together:
-  mkdir dir && cd dir || echo "Failed to create/enter directory"
-  
-  # Independent commands:
-  command1 ; command2 ; command3
-  # All run regardless of exit codes
-
-Exit codes:
-  # 0 = Success
-  # 1-255 = Failure (different meanings)
-  
-  # Check last exit code:
-  echo $?
-  
-  # Example:
-  ls /nonexistent
-  echo $?    # Shows non-zero (failure)
-  
-  ls /tmp
-  echo $?    # Shows 0 (success)
-
-Using exit codes in scripts:
-  #!/bin/bash
-  
-  if mkdir /tmp/test 2>/dev/null; then
-      echo "Directory created"
-  else
-      echo "Failed to create directory"
-  fi
-  
-  # Same thing with && and ||:
-  mkdir /tmp/test 2>/dev/null && \
-      echo "Directory created" || \
-      echo "Failed"
-
-Complex chaining example:
-  # Backup script with full error handling:
-  mkdir -p /backup/$(date +%Y-%m-%d) && \
-  tar czf /backup/$(date +%Y-%m-%d)/data.tar.gz /data 2>/dev/null && \
-  chmod 600 /backup/$(date +%Y-%m-%d)/data.tar.gz && \
-  echo "Backup successful" || \
-  { echo "Backup failed"; exit 1; }
-  
-  # If ANY step fails, final echo runs and script exits
-
-Short-circuit evaluation:
-  # This pattern is common:
-  [ -f config.txt ] || { echo "Config missing"; exit 1; }
-  # If file doesn't exist, error and exit
-  
-  # Or for success:
-  [ -f config.txt ] && echo "Config found"
-  # Only echo if file exists
-
-Verification:
-  ls -R /tmp/script-lab/backups/
-  # Should show dated directory with backup.log
-
-Real-world examples:
-  # Safe cd:
-  cd /some/path || exit 1
-  
-  # Create and enter directory:
-  mkdir project && cd project && git init
-  
-  # Download and extract:
-  wget https://example.com/file.tar.gz && tar xzf file.tar.gz
-  
-  # Check service:
-  systemctl is-active nginx && echo "Running" || echo "Stopped"
-
-EOF
-}
-
-hint_step_5() {
-    echo "  Combine loops and conditions: for f in *; do if [ -f \"\$f\" ]; then ...; fi; done"
-}
-
-# STEP 5: Combining loops and conditionals
-show_step_5() {
-    cat << 'EOF'
-TASK: Create a file processor with multiple conditions
-
-Write a script that processes files in /tmp/script-lab/data/ and:
-  - Skips non-regular files (directories, etc.)
-  - For .txt files: echo "Text: $filename" >> logs/processed.log
-  - For .dat files: echo "Data: $filename" >> logs/processed.log
-  - For other files: echo "Other: $filename" >> logs/processed.log
-
-Requirements:
-  • Script: /tmp/script-lab/scripts/file-processor.sh
-  • Loop through /tmp/script-lab/data/*
-  • Use if statements to check file types
-  • Use [[ ]] for pattern matching
-  • Output to: /tmp/script-lab/logs/processed.log
-
-Pattern matching with [[ ]]:
-  if [[ $filename == *.txt ]]; then
-      echo "Text file"
-  fi
-
-What you're learning:
-  Real scripts combine loops, conditionals, and tests to handle
-  complex scenarios. This pattern processes collections of items
-  with different logic for each type.
-EOF
-}
-
-validate_step_5() {
-    if [ ! -f "/tmp/script-lab/scripts/file-processor.sh" ]; then
-        echo ""
-        print_color "$RED" "✗ Script not found"
-        return 1
-    fi
-    
-    if [ ! -x "/tmp/script-lab/scripts/file-processor.sh" ]; then
-        echo ""
-        print_color "$RED" "✗ Script is not executable"
-        return 1
-    fi
-    
-    if [ ! -f "/tmp/script-lab/logs/processed.log" ]; then
-        echo ""
-        print_color "$RED" "✗ processed.log not created"
-        echo "  Run the script"
-        return 1
-    fi
-    
-    # Check if log contains expected entries
-    if ! grep -q "Text:" /tmp/script-lab/logs/processed.log 2>/dev/null; then
-        echo ""
-        print_color "$RED" "✗ No Text: entries in processed.log"
-        return 1
-    fi
-    
-    if ! grep -q "Data:" /tmp/script-lab/logs/processed.log 2>/dev/null; then
-        echo ""
-        print_color "$RED" "✗ No Data: entries in processed.log"
-        return 1
-    fi
-    
-    return 0
-}
-
-solution_step_5() {
-    cat << 'EOF'
-
-SOLUTION:
-─────────
-Create the script:
-
-cat > /tmp/script-lab/scripts/file-processor.sh << 'SCRIPT'
-#!/bin/bash
-# File type processor
-
-# Clear previous log
-> /tmp/script-lab/logs/processed.log
-
-for path in /tmp/script-lab/data/*; do
-    # Skip if not a regular file
-    [ ! -f "$path" ] && continue
-    
-    # Get just the filename
-    filename=$(basename "$path")
-    
-    # Check file type and process accordingly
-    if [[ $filename == *.txt ]]; then
-        echo "Text: $filename" >> /tmp/script-lab/logs/processed.log
-    elif [[ $filename == *.dat ]]; then
-        echo "Data: $filename" >> /tmp/script-lab/logs/processed.log
-    else
-        echo "Other: $filename" >> /tmp/script-lab/logs/processed.log
-    fi
-done
-
-echo "Processing complete. Check /tmp/script-lab/logs/processed.log"
-SCRIPT
-
-chmod +x /tmp/script-lab/scripts/file-processor.sh
-/tmp/script-lab/scripts/file-processor.sh
-
-Breaking it down:
-  • > /tmp/script-lab/logs/processed.log
-    - Clears the log file
-    - Creates it if doesn't exist
-    - Ensures fresh start
-  
-  • for path in /tmp/script-lab/data/*
-    - Loop through all items in data/
-    - Includes files and directories
-  
-  • [ ! -f "$path" ] && continue
-    - Test if NOT a regular file
-    - continue skips to next iteration
-    - This filters out directories
-  
-  • [[ $filename == *.txt ]]
-    - Double bracket syntax
-    - Allows pattern matching with ==
-    - No need to quote the pattern
-  
-  • elif [[ $filename == *.dat ]]
-    - Second condition (if first was false)
-    - Checks for .dat extension
-  
-  • else
-    - Catches everything else
+chmod +x /tmp/lab23a/scripts/deploy.sh
+/tmp/lab23a/scripts/deploy.sh
 
 Key concepts:
-  • continue statement
-    - Skips current iteration
-    - Jumps to next loop iteration
-    - Used to filter unwanted items
-  
-  • break statement (not used here but useful)
-    - Exits loop entirely
-    - Useful when search condition met
-  
-  • [[ ]] vs [ ]
-    - [[ ]] is bash-specific enhancement
-    - Allows pattern matching
-    - Safer with variables (less quoting needed)
-    - Supports && and || inside
 
-Pattern matching examples:
-  # File extensions:
-  [[ $file == *.txt ]]
-  [[ $file == *.log ]] || [[ $file == *.txt ]]
-  
-  # Starts with:
-  [[ $file == log* ]]
-  
-  # Contains:
-  [[ $file == *backup* ]]
-  
-  # Multiple patterns:
-  [[ $file == *.txt || $file == *.md ]]
+  source vs subshell execution:
+    ./deploy.conf        subshell — variables vanish when done
+    bash deploy.conf     subshell — same issue
+    source deploy.conf   current shell — variables persist afterward
+    . deploy.conf        identical to source (POSIX spelling)
 
-Loop control statements:
-  # continue - skip to next iteration:
-  for i in {1..10}; do
-      [ $i -eq 5 ] && continue
-      echo $i    # Prints 1,2,3,4,6,7,8,9,10 (skips 5)
-  done
-  
-  # break - exit loop:
-  for i in {1..10}; do
-      [ $i -eq 5 ] && break
-      echo $i    # Prints 1,2,3,4 then stops
-  done
+  Why this pattern matters:
+    Config files let you separate site-specific values from script logic.
+    The same deploy.sh works in dev, staging, and production by pointing
+    at different .conf files. The script code never changes.
 
-Real-world pattern - processing with filters:
-  #!/bin/bash
-  # Process log files, skip archives
-  
-  for file in /var/log/*; do
-      # Skip if not regular file
-      [ ! -f "$file" ] && continue
-      
-      # Skip if archived (gzipped)
-      [[ $file == *.gz ]] && continue
-      
-      # Skip if empty
-      [ ! -s "$file" ] && continue
-      
-      # Process the file
-      echo "Processing $file"
-      grep "ERROR" "$file" >> /tmp/errors.log
-  done
+  Checking the config file exists before sourcing is important: if source
+  is given a non-existent file, bash errors out but the script may continue
+  executing with undefined variables — leading to confusing failures.
 
-Combining multiple conditions:
-  for user in $(cut -d: -f1 /etc/passwd); do
-      # Skip system users (UID < 1000)
-      uid=$(id -u "$user" 2>/dev/null)
-      [ -z "$uid" ] && continue
-      [ $uid -lt 1000 ] && continue
-      
-      # Skip if no home directory
-      home=$(eval echo ~"$user")
-      [ ! -d "$home" ] && continue
-      
-      # Process regular user with home directory
-      echo "User: $user (UID: $uid, Home: $home)"
-  done
+  source in interactive shells:
+    You can also use source in your bash session to load environment
+    variables from a file without starting a new shell. This is exactly
+    what ~/.bashrc does: it's sourced by your login shell.
+
+  Multiple config files / layering:
+    source /etc/myapp/defaults.conf   # site-wide defaults
+    source ~/.myapp.conf              # user overrides (loaded after, wins)
 
 Verification:
-  cat /tmp/script-lab/logs/processed.log
-  # Should show:
-  # Text: file01.txt
-  # Text: file02.txt
-  # ...
-  # Data: small.dat
-  # Data: medium.dat
-  # Data: large.dat
-  # Other: servers.txt
-  # etc.
-
-EOF
-}
-
-hint_step_6() {
-    echo "  Use tar czf backup-\$(date +%Y%m%d-%H%M%S).tar.gz to create timestamped archive"
-}
-
-# STEP 6: Complete automation script
-show_step_6() {
-    cat << 'EOF'
-TASK: Create a comprehensive backup script
-
-Write a production-ready backup script that:
-  1. Creates timestamped backup directory
-  2. Checks if source exists
-  3. Creates tar.gz archive with timestamp
-  4. Validates archive was created
-  5. Reports success or failure
-
-Requirements:
-  • Script: /tmp/script-lab/scripts/backup.sh
-  • Backup /tmp/script-lab/data to /tmp/script-lab/backups/
-  • Format: backup-YYYYMMDD-HHMMSS.tar.gz
-  • Include error checking at each step
-  • Final message: "Backup completed" or "Backup failed"
-
-Commands needed:
-  • date +%Y%m%d-%H%M%S for timestamp
-  • tar czf to create compressed archive
-  • if statements for validation
-  • && and || for flow control
-
-What you're learning:
-  Production scripts need robust error handling. This combines all
-  the concepts: variables, conditionals, command substitution, and
-  error handling into a reliable automation tool.
-EOF
-}
-
-validate_step_6() {
-    if [ ! -f "/tmp/script-lab/scripts/backup.sh" ]; then
-        echo ""
-        print_color "$RED" "✗ Backup script not found"
-        return 1
-    fi
-    
-    if [ ! -x "/tmp/script-lab/scripts/backup.sh" ]; then
-        echo ""
-        print_color "$RED" "✗ Script is not executable"
-        return 1
-    fi
-    
-    # Check if any backup file was created
-    local backup_count=$(ls /tmp/script-lab/backups/backup-*.tar.gz 2>/dev/null | wc -l)
-    if [ "$backup_count" -lt 1 ]; then
-        echo ""
-        print_color "$RED" "✗ No backup archive found"
-        echo "  Run the script to create backup"
-        return 1
-    fi
-    
-    # Verify archive is not empty
-    local backup_file=$(ls -t /tmp/script-lab/backups/backup-*.tar.gz 2>/dev/null | head -1)
-    if [ -n "$backup_file" ]; then
-        local size=$(stat -c%s "$backup_file" 2>/dev/null || echo 0)
-        if [ "$size" -lt 100 ]; then
-            echo ""
-            print_color "$RED" "✗ Backup archive seems empty or corrupt"
-            return 1
-        fi
-    fi
-    
-    return 0
-}
-
-solution_step_6() {
-    cat << 'EOF'
-
-SOLUTION:
-─────────
-Create the script:
-
-cat > /tmp/script-lab/scripts/backup.sh << 'SCRIPT'
-#!/bin/bash
-# Production backup script
-
-# Variables
-SOURCE_DIR="/tmp/script-lab/data"
-BACKUP_DIR="/tmp/script-lab/backups"
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-BACKUP_FILE="backup-${TIMESTAMP}.tar.gz"
-
-# Validation
-if [ ! -d "$SOURCE_DIR" ]; then
-    echo "ERROR: Source directory $SOURCE_DIR does not exist"
-    exit 1
-fi
-
-# Create backup directory if needed
-mkdir -p "$BACKUP_DIR" || {
-    echo "ERROR: Failed to create backup directory"
-    exit 1
-}
-
-# Create backup
-echo "Creating backup of $SOURCE_DIR..."
-tar czf "${BACKUP_DIR}/${BACKUP_FILE}" -C "$(dirname "$SOURCE_DIR")" "$(basename "$SOURCE_DIR")" 2>/dev/null
-
-# Verify backup was created
-if [ -f "${BACKUP_DIR}/${BACKUP_FILE}" ]; then
-    SIZE=$(stat -c%s "${BACKUP_DIR}/${BACKUP_FILE}")
-    echo "✓ Backup completed successfully"
-    echo "  File: ${BACKUP_FILE}"
-    echo "  Size: ${SIZE} bytes"
-    exit 0
-else
-    echo "✗ ERROR: Backup failed"
-    exit 1
-fi
-SCRIPT
-
-chmod +x /tmp/script-lab/scripts/backup.sh
-/tmp/script-lab/scripts/backup.sh
-
-Breaking it down:
-  • Variables at the top
-    - Makes script configurable
-    - Easy to modify paths
-    - TIMESTAMP captures current time
-  
-  • First validation block
-    - Checks if source exists
-    - Exits with error code 1 if not
-    - exit 1 signals failure to calling script
-  
-  • mkdir -p "$BACKUP_DIR" || { ... }
-    - Create backup dir
-    - || block executes if mkdir fails
-    - { } groups multiple commands
-    - exit 1 stops script
-  
-  • tar czf
-    - c: create archive
-    - z: compress with gzip
-    - f: filename follows
-    - -C: change to directory
-    - Captures dirname/basename for clean archive
-  
-  • Final validation
-    - Checks if backup file exists
-    - Reports size
-    - Different exit codes for success/failure
-
-Script best practices:
-  • Use variables for paths and values
-  • Validate inputs and prerequisites
-  • Check each critical step
-  • Provide clear error messages
-  • Use appropriate exit codes
-  • Add comments for complex logic
-  • Quote all variables
-
-Exit codes convention:
-  0    Success
-  1    General error
-  2    Misuse of command
-  126  Command cannot execute
-  127  Command not found
-  130  Script terminated by Ctrl+C
-
-Using exit codes:
-  # In calling script:
-  if /path/to/backup.sh; then
-      echo "Backup successful"
-  else
-      echo "Backup failed"
-  fi
-  
-  # Or with &&:
-  /path/to/backup.sh && echo "Success" || echo "Failed"
-
-Production enhancements:
-  # Add logging:
-  LOG="/var/log/backup.log"
-  exec 1>> "$LOG" 2>&1    # Redirect all output to log
-  
-  # Add email notification:
-  if ! /path/to/backup.sh; then
-      echo "Backup failed" | mail -s "Backup Error" admin@example.com
-  fi
-  
-  # Add retention (keep last 7 days):
-  find "$BACKUP_DIR" -name "backup-*.tar.gz" -mtime +7 -delete
-  
-  # Add remote copy:
-  scp "${BACKUP_DIR}/${BACKUP_FILE}" backup-server:/backups/
-  
-  # Add integrity check:
-  tar tzf "$BACKUP_FILE" >/dev/null || {
-      echo "Archive corrupted"
-      exit 1
-  }
-
-Complete production script pattern:
-  #!/bin/bash
-  set -euo pipefail    # Exit on error, undefined vars, pipe failures
-  
-  # Configuration
-  SOURCE="/data"
-  DEST="/backup"
-  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-  LOG="/var/log/backup.log"
-  
-  # Logging function
-  log() {
-      echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"
-  }
-  
-  # Main backup function
-  perform_backup() {
-      log "Starting backup..."
-      
-      if ! tar czf "${DEST}/backup-${TIMESTAMP}.tar.gz" "$SOURCE"; then
-          log "ERROR: Backup failed"
-          return 1
-      fi
-      
-      log "SUCCESS: Backup completed"
-      return 0
-  }
-  
-  # Cleanup old backups
-  cleanup_old() {
-      log "Cleaning up old backups..."
-      find "$DEST" -name "backup-*.tar.gz" -mtime +7 -delete
-  }
-  
-  # Main execution
-  perform_backup && cleanup_old || {
-      log "Backup process failed"
-      exit 1
-  }
-
-Verification:
-  ls -lh /tmp/script-lab/backups/
-  # Should show backup-YYYYMMDD-HHMMSS.tar.gz
-  
-  tar tzf /tmp/script-lab/backups/backup-*.tar.gz | head
-  # Lists contents to verify
+  cat /tmp/lab23a/output/deploy.log   # → Deployed myapp at [timestamp]
+  ls /tmp/lab23a/output/deploy/       # directory exists
 
 EOF
 }
@@ -1363,309 +742,218 @@ EOF
 #############################################################################
 validate() {
     local score=0
-    local total=6
-    
-    echo "Checking your bash scripting work..."
+    local total=4
+
+    echo "Checking your work..."
     echo ""
-    
-    # Check 1: For-loop script
-    print_color "$CYAN" "[1/$total] Checking for-loop (server-check.sh)..."
-    if [ -x "/tmp/script-lab/scripts/server-check.sh" ]; then
-        local log_count=$(ls /tmp/script-lab/logs/*-status.txt 2>/dev/null | wc -l)
-        if [ "$log_count" -ge 5 ]; then
-            print_color "$GREEN" "  ✓ For-loop script working ($log_count status files created)"
+
+    # CHECK 1: greet.sh
+    print_color "$CYAN" "[1/$total] Checking greet.sh (positional parameters + validation)..."
+    local script="/tmp/lab23a/scripts/greet.sh"
+    if [ -x "$script" ]; then
+        "$script" >/dev/null 2>&1
+        local no_args_exit=$?
+        local one_arg_out; one_arg_out=$("$script" alice 2>/dev/null)
+        local two_arg_out; two_arg_out=$("$script" alice Dr 2>/dev/null)
+
+        if [ "$no_args_exit" -ne 0 ] && \
+           echo "$one_arg_out" | grep -q "alice" && \
+           echo "$two_arg_out" | grep -q "alice" && \
+           echo "$two_arg_out" | grep -q "Dr"; then
+            print_color "$GREEN" "  ✓ Argument validation and default value working"
             ((score++))
         else
-            print_color "$RED" "  ✗ Script exists but not all log files created"
+            [ "$no_args_exit" -eq 0 ] && print_color "$RED" "  ✗ Should exit 1 with no arguments"
+            ! echo "$one_arg_out" | grep -q "alice" && print_color "$RED" "  ✗ Name not in output"
+            ! echo "$two_arg_out" | grep -q "Dr" && print_color "$RED" "  ✗ Title not in output"
         fi
     else
-        print_color "$RED" "  ✗ server-check.sh not found or not executable"
-        print_color "$YELLOW" "  Create script with for-loop processing servers.txt"
+        print_color "$RED" "  ✗ greet.sh not found or not executable"
     fi
     echo ""
-    
-    # Check 2: While loop script
-    print_color "$CYAN" "[2/$total] Checking while-loop (countdown.sh)..."
-    if [ -x "/tmp/script-lab/scripts/countdown.sh" ]; then
-        local count_files=0
-        for i in {1..5}; do
-            [ -f "/tmp/script-lab/logs/count-$i.txt" ] && ((count_files++))
+
+    # CHECK 2: dispatch.sh
+    print_color "$CYAN" "[2/$total] Checking dispatch.sh (case statement)..."
+    script="/tmp/lab23a/scripts/dispatch.sh"
+    if [ -x "$script" ]; then
+        local all_valid=1
+        for cmd in start stop status restart; do
+            "$script" "$cmd" >/dev/null 2>&1 || { all_valid=0; break; }
         done
-        if [ "$count_files" -eq 5 ]; then
-            print_color "$GREEN" "  ✓ While-loop countdown working correctly"
+        "$script" bogus >/dev/null 2>&1
+        local invalid_exit=$?
+
+        if [ "$all_valid" -eq 1 ] && [ "$invalid_exit" -ne 0 ]; then
+            print_color "$GREEN" "  ✓ case statement handles all branches correctly"
             ((score++))
         else
-            print_color "$RED" "  ✗ Missing countdown files ($count_files/5)"
+            [ "$all_valid" -eq 0 ] && print_color "$RED" "  ✗ A valid command (start/stop/status/restart) returned non-zero"
+            [ "$invalid_exit" -eq 0 ] && print_color "$RED" "  ✗ Unknown command should exit 1, not 0"
         fi
     else
-        print_color "$RED" "  ✗ countdown.sh not found or not executable"
+        print_color "$RED" "  ✗ dispatch.sh not found or not executable"
     fi
     echo ""
-    
-    # Check 3: If-else script
-    print_color "$CYAN" "[3/$total] Checking if-else (size-check.sh)..."
-    if [ -x "/tmp/script-lab/scripts/size-check.sh" ]; then
-        if [ -f "/tmp/script-lab/logs/small.dat-category.txt" ] && \
-           [ -f "/tmp/script-lab/logs/medium.dat-category.txt" ] && \
-           [ -f "/tmp/script-lab/logs/large.dat-category.txt" ]; then
-            print_color "$GREEN" "  ✓ File categorization working"
+
+    # CHECK 3: parse-users.sh
+    print_color "$CYAN" "[3/$total] Checking parse-users.sh (while read with IFS)..."
+    script="/tmp/lab23a/scripts/parse-users.sh"
+    if [ -x "$script" ]; then
+        "$script" >/dev/null 2>&1
+        local report="/tmp/lab23a/output/user-report.txt"
+        if [ -f "$report" ]; then
+            local lines; lines=$(wc -l < "$report")
+            local all_users=1
+            for user in alice bob charlie diana; do
+                grep -q "$user" "$report" || { all_users=0; break; }
+            done
+            if [ "$lines" -ge 4 ] && [ "$all_users" -eq 1 ]; then
+                print_color "$GREEN" "  ✓ while read parsed all 4 users into user-report.txt"
+                ((score++))
+            else
+                print_color "$RED" "  ✗ user-report.txt has $lines lines or missing users"
+            fi
+        else
+            print_color "$RED" "  ✗ user-report.txt not created — run the script"
+        fi
+    else
+        print_color "$RED" "  ✗ parse-users.sh not found or not executable"
+    fi
+    echo ""
+
+    # CHECK 4: deploy.sh
+    print_color "$CYAN" "[4/$total] Checking deploy.sh (source config file)..."
+    script="/tmp/lab23a/scripts/deploy.sh"
+    if [ -x "$script" ]; then
+        "$script" >/dev/null 2>&1
+        local uses_source=0
+        grep -qE "^(source|\.) " "$script" && uses_source=1
+
+        if [ "$uses_source" -eq 1 ] && \
+           [ -d "/tmp/lab23a/output/deploy" ] && \
+           grep -q "Deployed" /tmp/lab23a/output/deploy.log 2>/dev/null; then
+            print_color "$GREEN" "  ✓ Config sourced, DEPLOY_DIR created, LOG_FILE written"
             ((score++))
         else
-            print_color "$RED" "  ✗ Not all category files created"
+            [ "$uses_source" -eq 0 ] && print_color "$RED" "  ✗ Script does not use source or '.'"
+            [ ! -d "/tmp/lab23a/output/deploy" ] && print_color "$RED" "  ✗ \$DEPLOY_DIR not created"
+            ! grep -q "Deployed" /tmp/lab23a/output/deploy.log 2>/dev/null && \
+                print_color "$RED" "  ✗ 'Deployed' not found in \$LOG_FILE"
         fi
     else
-        print_color "$RED" "  ✗ size-check.sh not found or not executable"
+        print_color "$RED" "  ✗ deploy.sh not found or not executable"
     fi
     echo ""
-    
-    # Check 4: Command chaining
-    print_color "$CYAN" "[4/$total] Checking command chaining (safe-backup.sh)..."
-    if [ -x "/tmp/script-lab/scripts/safe-backup.sh" ]; then
-        if [ -d "/tmp/script-lab/backups" ]; then
-            local dated=$(find /tmp/script-lab/backups -maxdepth 1 -type d -name "????-??-??" | wc -l)
-            if [ "$dated" -ge 1 ]; then
-                print_color "$GREEN" "  ✓ Command chaining with && working"
-                ((score++))
-            else
-                print_color "$RED" "  ✗ Dated directory not created"
-            fi
-        else
-            print_color "$RED" "  ✗ Backup directory not created"
-        fi
-    else
-        print_color "$RED" "  ✗ safe-backup.sh not found or not executable"
-    fi
-    echo ""
-    
-    # Check 5: Combined loops and conditions
-    print_color "$CYAN" "[5/$total] Checking combined logic (file-processor.sh)..."
-    if [ -x "/tmp/script-lab/scripts/file-processor.sh" ]; then
-        if [ -f "/tmp/script-lab/logs/processed.log" ]; then
-            if grep -q "Text:" /tmp/script-lab/logs/processed.log && \
-               grep -q "Data:" /tmp/script-lab/logs/processed.log; then
-                print_color "$GREEN" "  ✓ File processing with conditions working"
-                ((score++))
-            else
-                print_color "$RED" "  ✗ processed.log missing expected entries"
-            fi
-        else
-            print_color "$RED" "  ✗ processed.log not created"
-        fi
-    else
-        print_color "$RED" "  ✗ file-processor.sh not found or not executable"
-    fi
-    echo ""
-    
-    # Check 6: Complete backup script
-    print_color "$CYAN" "[6/$total] Checking backup script..."
-    if [ -x "/tmp/script-lab/scripts/backup.sh" ]; then
-        local backup_count=$(ls /tmp/script-lab/backups/backup-*.tar.gz 2>/dev/null | wc -l)
-        if [ "$backup_count" -ge 1 ]; then
-            local backup=$(ls -t /tmp/script-lab/backups/backup-*.tar.gz 2>/dev/null | head -1)
-            local size=$(stat -c%s "$backup" 2>/dev/null || echo 0)
-            if [ "$size" -gt 100 ]; then
-                print_color "$GREEN" "  ✓ Complete backup script working"
-                ((score++))
-            else
-                print_color "$RED" "  ✗ Backup file too small or corrupt"
-            fi
-        else
-            print_color "$RED" "  ✗ No backup archive created"
-        fi
-    else
-        print_color "$RED" "  ✗ backup.sh not found or not executable"
-    fi
-    echo ""
-    
-    # Final results
+
     print_color "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_color "$BOLD" "FINAL SCORE: $score/$total"
-    
+
     if [ $score -eq $total ]; then
         print_color "$GREEN" "STATUS: ✓ PASSED"
         echo ""
-        echo "Outstanding! You've mastered:"
-        echo "  • For-loops for list processing"
-        echo "  • While-loops with counters"
-        echo "  • If-then-else conditional logic"
-        echo "  • Test operators and file checks"
-        echo "  • Command chaining with && and ||"
-        echo "  • Production-ready automation scripts"
-        echo ""
-        echo "You can now automate complex system administration tasks!"
-    elif [ $score -ge 4 ]; then
-        print_color "$YELLOW" "STATUS: ⚠ GOOD PROGRESS ($score/$total)"
-        echo ""
-        echo "You're on the right track! Review failed sections."
+        echo "You've covered the four patterns that appear most in real RHCSA exam scripts."
     else
-        print_color "$YELLOW" "STATUS: ⚠ NEEDS PRACTICE ($score/$total)"
+        print_color "$YELLOW" "STATUS: ⚠ INCOMPLETE ($score/$total checks passed)"
         echo ""
-        echo "Scripting takes practice. Review with --solution."
+        echo "Review the feedback above and try again."
+        echo "Run with --solution to see detailed steps."
     fi
     print_color "$CYAN" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
+
     export VALIDATION_SCORE=$score
     export VALIDATION_TOTAL=$total
-    
     [ $score -eq $total ]
 }
 
 #############################################################################
-# SOLUTION
+# SOLUTION (Standard Mode)
 #############################################################################
 solution() {
     cat << 'EOF'
 COMPLETE SOLUTION WALKTHROUGH
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-This lab covers the fundamental building blocks of bash scripting:
-loops, conditionals, tests, and command chaining.
-
-
-FOR-LOOPS: Processing Lists
+STEP 1 — greet.sh (positional parameters):
 ─────────────────────────────────────────────────────────────────
-Basic syntax:
-  for variable in list; do
-      commands
-  done
+  #!/bin/bash
+  [ -z "$1" ] && { echo "Usage: $(basename $0) <name> [title]"; exit 1; }
+  echo "Hello, ${2:-User} ${1}!"
 
-Variations:
-  # Explicit list:
-  for color in red green blue; do echo $color; done
-  
-  # File glob:
-  for file in *.txt; do echo $file; done
-  
-  # Command output:
-  for user in $(cut -d: -f1 /etc/passwd); do echo $user; done
-  
-  # Range:
-  for i in {1..10}; do echo $i; done
-  
-  # C-style:
-  for ((i=1; i<=10; i++)); do echo $i; done
+  $1, $2: positional parameters from command line
+  ${2:-User}: use $2 if set, otherwise "User"
+  -z: test for empty string
 
 
-WHILE-LOOPS: Conditional Repetition
+STEP 2 — dispatch.sh (case statement):
 ─────────────────────────────────────────────────────────────────
-Basic syntax:
-  while condition; do
-      commands
-  done
+  #!/bin/bash
+  case $1 in
+      start)   echo "Starting..." ;;
+      stop)    echo "Stopping..." ;;
+      status)  echo "Status: running" ;;
+      restart) echo "Restarting..." ;;
+      *)       echo "Unknown: $1"; exit 1 ;;
+  esac
 
-Patterns:
-  # Counter:
-  i=1
-  while [ $i -le 10 ]; do
-      echo $i
-      i=$((i+1))
-  done
-  
-  # Read file:
-  while read -r line; do
-      echo "$line"
-  done < file.txt
-  
-  # Infinite with break:
-  while true; do
-      read -p "Continue? " answer
-      [ "$answer" = "no" ] && break
-  done
+  *) is the catch-all default — always put it last
+  ;; terminates each branch (required — not optional like C's break)
+  | between patterns means OR: start|begin)
 
 
-IF-THEN-ELSE: Conditional Execution
+STEP 3 — parse-users.sh (while read + IFS):
 ─────────────────────────────────────────────────────────────────
-Basic syntax:
-  if condition; then
-      commands
-  elif condition; then
-      commands
-  else
-      commands
-  fi
+  #!/bin/bash
+  > /tmp/lab23a/output/user-report.txt
+  while IFS=: read -r username group shell; do
+      echo "User: $username | Group: $group | Shell: $shell" \
+          >> /tmp/lab23a/output/user-report.txt
+  done < /tmp/lab23a/users.csv
 
-Test operators:
-  # Files:
-  -f file    regular file exists
-  -d dir     directory exists
-  -e path    path exists
-  -r/-w/-x   readable/writable/executable
-  -s file    file has size > 0
-  
-  # Numbers:
-  -eq -ne -lt -le -gt -ge
-  
-  # Strings:
-  = != -z -n
-  
-  # Logic:
-  -a (AND)  -o (OR)  ! (NOT)
+  IFS=: scoped to read command; -r prevents backslash interpretation
+  < file feeds the file into the while loop via stdin
 
 
-COMMAND CHAINING: Flow Control
+STEP 4 — deploy.sh (source):
 ─────────────────────────────────────────────────────────────────
-Operators:
-  &&    AND (run if previous succeeded)
-  ||    OR (run if previous failed)
-  ;     separator (run regardless)
+  #!/bin/bash
+  source /tmp/lab23a/config/deploy.conf
+  mkdir -p "$DEPLOY_DIR"
+  echo "Deployed $APP_NAME at $(date)" >> "$LOG_FILE"
 
-Examples:
-  mkdir dir && cd dir && touch file
-  command || echo "Failed"
-  cmd1 ; cmd2 ; cmd3
+  source runs the config in the current shell — variables persist
+  . is the POSIX equivalent of source
 
 
-PRACTICAL PATTERNS
+CONCEPTUAL UNDERSTANDING
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Processing files with filtering:
-  for file in /path/*; do
-      [ ! -f "$file" ] && continue
-      [[ $file == *.txt ]] || continue
-      # Process text files only
-  done
+The Four Input Patterns for Scripts:
+  1. Hardcoded:   VAR="value" inside the script
+  2. Arguments:   $1, $2, $@ — passed at runtime
+  3. Sourced:     . config.conf — loaded from external file
+  4. Prompted:    read -p "Enter value: " VAR — interactive
 
-Safe operations:
-  mkdir -p /backup && \
-  tar czf /backup/data.tar.gz /data && \
-  echo "Success" || echo "Failed"
+When to use which:
+  Arguments → when values vary per invocation (filename, username)
+  source    → when values are site-specific but stable (paths, app names)
+  read      → when the script needs interactive user input
+  Hardcoded → only for truly constant values that never change
 
-Validation before action:
-  if [ ! -d "$SOURCE" ]; then
-      echo "Source missing"
-      exit 1
-  fi
-
-Reading user input:
-  while true; do
-      read -p "Enter choice: " choice
-      case $choice in
-          1) echo "Option 1";;
-          2) echo "Option 2";;
-          q) break;;
-          *) echo "Invalid";;
-      esac
-  done
+while read vs for loop for files:
+  for line in $(cat file)  → splits on whitespace; breaks on spaces in data
+  while read -r line       → reads one full line; safe for any content
+  Always prefer while read for line-by-line file processing.
 
 
 EXAM TIPS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. Test on command line first:
-   for i in {1..5}; do echo $i; done
-
-2. Always quote variables in tests:
-   [ "$var" = "value" ]
-
-3. Use [[ ]] for pattern matching:
-   [[ $file == *.txt ]]
-
-4. Check exit codes:
-   echo $?
-
-5. Use set -x for debugging:
-   #!/bin/bash
-   set -x    # Print each command
+1. Know $1, $2, $@, $#, $0 — positional parameters appear on every exam
+2. case is cleaner than long if-elif chains — use it when matching one var
+3. while IFS=: read — the standard pattern for parsing /etc/passwd-style files
+4. source / . — both spellings work; . is more portable (POSIX)
+5. ${VAR:-default} — parameter expansion with fallback; avoids if blocks
+6. Always validate arguments: [ -z "$1" ] && { echo "Usage..."; exit 1; }
 
 EOF
 }
@@ -1675,9 +963,8 @@ EOF
 #############################################################################
 cleanup_lab() {
     echo "Cleaning up lab environment..."
-    rm -rf /tmp/script-lab 2>/dev/null || true
+    rm -rf /tmp/lab23a 2>/dev/null || true
     echo "  ✓ All lab files removed"
 }
 
-# Execute the main framework
 main "$@"
