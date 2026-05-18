@@ -1,5 +1,5 @@
 #!/bin/bash
-# labs/07-bash-scripting-lab.sh
+# labs/24A-bash-scripting.sh
 # Lab: Bash Scripting Fundamentals - Loops and Conditionals
 # Difficulty: Intermediate
 # RHCSA Objective: Create simple shell scripts
