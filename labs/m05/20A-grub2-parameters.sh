@@ -41,6 +41,7 @@ Knowledge Requirements:
 
 Commands You'll Use:
   • grub2-mkconfig   - Regenerates /boot/grub2/grub.cfg from configuration sources
+  • grubby           - Red Hat tool for per-kernel BLS entry management (preferred on RHEL 9+)
   • grep             - Searches file contents
   • cat              - Displays file contents
   • diff             - Compares two files
@@ -86,16 +87,23 @@ OBJECTIVES:
      then regenerate /boot/grub2/grub.cfg using grub2-mkconfig.
      Verify the parameter appears in the regenerated grub.cfg.
 
+  4. Use grubby to add a second parameter 'grubby_lab_test' directly to the BLS entry
+     for the running kernel — WITHOUT touching /etc/default/grub or running grub2-mkconfig.
+     Understand when grubby is the correct tool versus the grub2-mkconfig workflow.
+
 HINTS:
   • Use 'uname -r' to find your current kernel version for locating the BLS entry
   • grep is your friend: grep CMDLINE /etc/default/grub
   • The BLS entry filename usually contains the kernel version string
   • grub2-mkconfig requires root and the -o flag to specify output file
+  • grubby --default-kernel prints the path to the default kernel; use with --update-kernel
 
 SUCCESS CRITERIA:
   • You can explain the difference between /etc/default/grub and /boot/grub2/grub.cfg
   • The string 'quiet_lab_test' appears in /etc/default/grub on GRUB_CMDLINE_LINUX
   • The string 'quiet_lab_test' appears in /boot/grub2/grub.cfg after regeneration
+  • The string 'grubby_lab_test' appears in the BLS entry for the running kernel
+  • You can explain when to use grubby vs grub2-mkconfig
 EOF
 }
 
@@ -107,6 +115,7 @@ objectives_quick() {
   ☐ 1. Display /etc/default/grub and identify GRUB_CMDLINE_LINUX
   ☐ 2. Locate and display the BLS entry for the running kernel in /boot/loader/entries/
   ☐ 3. Add 'quiet_lab_test' to GRUB_CMDLINE_LINUX and regenerate grub.cfg
+  ☐ 4. Use grubby to add 'grubby_lab_test' directly to the running kernel's BLS entry
 EOF
 }
 
@@ -114,7 +123,7 @@ EOF
 # INTERACTIVE MODE
 #############################################################################
 get_step_count() {
-    echo "3"
+    echo "4"
 }
 
 scenario_context() {
@@ -323,12 +332,92 @@ Verification:
 EOF
 }
 
+hint_step_4() {
+    echo "  Use: grubby --update-kernel=\$(grubby --default-kernel) --args='grubby_lab_test'"
+    echo "  Then verify: grubby --info=\$(grubby --default-kernel)"
+}
+
+# STEP 4
+show_step_4() {
+    cat << 'EOF'
+TASK: Use grubby to add a kernel argument directly to the BLS entry
+
+grubby is the Red Hat-preferred tool for making per-kernel cmdline changes
+on RHEL 9+. Unlike the grub2-mkconfig workflow (which touches /etc/default/grub
+and rebuilds grub.cfg), grubby edits the BLS .conf file directly and takes
+effect immediately — no grub2-mkconfig step required.
+
+Add the argument 'grubby_lab_test' to the default kernel's BLS entry using
+grubby, then verify it appears in the BLS file and via grubby's own info output.
+
+Requirements:
+  • Add 'grubby_lab_test' using grubby --update-kernel and --args
+  • Target the default kernel (use grubby --default-kernel to get its path)
+  • Verify the change using grubby --info and by inspecting /boot/loader/entries/
+
+Commands you might need:
+  • grubby --default-kernel
+  • grubby --update-kernel=$(grubby --default-kernel) --args='grubby_lab_test'
+  • grubby --info=$(grubby --default-kernel)
+  • grep grubby_lab_test /boot/loader/entries/*.conf
+EOF
+}
+
+validate_step_4() {
+    # Check that grubby_lab_test appears in any BLS entry (grubby edits the .conf directly)
+    if grep -q "grubby_lab_test" /boot/loader/entries/*.conf 2>/dev/null; then
+        return 0
+    fi
+    echo ""
+    print_color "$RED" "✗ 'grubby_lab_test' not found in any /boot/loader/entries/*.conf file"
+    echo "  Fix: grubby --update-kernel=\$(grubby --default-kernel) --args='grubby_lab_test'"
+    return 1
+}
+
+solution_step_4() {
+    cat << 'EOF'
+
+SOLUTION:
+─────────
+Commands:
+  # Add the argument to the default kernel's BLS entry
+  grubby --update-kernel=$(grubby --default-kernel) --args='grubby_lab_test'
+
+  # Verify via grubby
+  grubby --info=$(grubby --default-kernel)
+
+  # Verify directly in the BLS file (grubby edits this for you)
+  grep grubby_lab_test /boot/loader/entries/*.conf
+
+Explanation:
+  • grubby --default-kernel: prints the full path to the default kernel image,
+    e.g. /boot/vmlinuz-5.14.0-427.el9.x86_64
+  • --update-kernel=<path>: specifies which kernel's BLS entry to modify
+  • --args='...': the kernel argument(s) to ADD to the existing options line
+    (use --remove-args='...' to remove)
+  • grubby writes directly to /boot/loader/entries/<entry>.conf — no grub2-mkconfig needed
+
+To remove an argument later:
+  grubby --update-kernel=$(grubby --default-kernel) --remove-args='grubby_lab_test'
+
+Why grubby instead of grub2-mkconfig for this?
+  See the CONCEPTUAL UNDERSTANDING section in --solution for a full comparison.
+  Short answer: grubby is surgical (one kernel, immediate); grub2-mkconfig is
+  global (all kernels, requires an extra regeneration step).
+
+Verification:
+  grubby --info=$(grubby --default-kernel) | grep args
+  # Expected: args="... grubby_lab_test"
+
+EOF
+}
+
 #############################################################################
 # VALIDATION (Standard Mode)
 #############################################################################
 validate() {
     local score=0
-    local total=2
+    local total=3
 
     echo "Checking your configuration..."
     echo ""
@@ -350,6 +439,16 @@ validate() {
     else
         print_color "$RED" "  ✗ 'quiet_lab_test' not in /boot/grub2/grub.cfg"
         print_color "$YELLOW" "  Fix: grub2-mkconfig -o /boot/grub2/grub.cfg"
+    fi
+    echo ""
+
+    print_color "$CYAN" "[3/$total] Checking BLS entry for 'grubby_lab_test' (grubby was used)..."
+    if grep -q "grubby_lab_test" /boot/loader/entries/*.conf 2>/dev/null; then
+        print_color "$GREEN" "  ✓ Parameter found in /boot/loader/entries/*.conf"
+        ((score++))
+    else
+        print_color "$RED" "  ✗ 'grubby_lab_test' not found in any BLS entry"
+        print_color "$YELLOW" "  Fix: grubby --update-kernel=\$(grubby --default-kernel) --args='grubby_lab_test'"
     fi
     echo ""
 
@@ -405,7 +504,7 @@ grub2-mkconfig merges global GRUB_CMDLINE_LINUX values into these BLS entries
 when generating grub.cfg.
 
 
-STEP 3: Add the Kernel Parameter and Regenerate
+STEP 3: Add a Kernel Parameter via grub2-mkconfig (Global Workflow)
 ─────────────────────────────────────────────────────────────────
 Commands:
   vi /etc/default/grub
@@ -416,21 +515,64 @@ Commands:
   grep quiet_lab_test /boot/grub2/grub.cfg
 
 
+STEP 4: Add a Kernel Parameter via grubby (Per-Kernel Workflow)
+─────────────────────────────────────────────────────────────────
+Commands:
+  grubby --update-kernel=$(grubby --default-kernel) --args='grubby_lab_test'
+  grubby --info=$(grubby --default-kernel)
+  grep grubby_lab_test /boot/loader/entries/*.conf
+
+To remove it afterward:
+  grubby --update-kernel=$(grubby --default-kernel) --remove-args='grubby_lab_test'
+
+
 CONCEPTUAL UNDERSTANDING
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-The GRUB2 Config Pipeline:
-  /etc/default/grub  ──┐
-  /boot/loader/entries/ ──┤─→  grub2-mkconfig  →  /boot/grub2/grub.cfg  →  GRUB2 reads this at boot
+The GRUB2 Config Pipeline (grub2-mkconfig workflow):
+  /etc/default/grub   ──┐
+  /boot/loader/entries/ ──┤──→  grub2-mkconfig  ──→  /boot/grub2/grub.cfg  ──→  GRUB2 reads at boot
   /etc/grub.d/ scripts ──┘
 
   Never hand-edit /boot/grub2/grub.cfg — it will be overwritten by the next
   kernel update or grub2-mkconfig run.
 
+grubby vs grub2-mkconfig — When to Use Each:
+  These two tools operate at different layers and serve different purposes.
+
+  grub2-mkconfig:
+    • Scope:   GLOBAL — changes apply to ALL installed kernels
+    • Target:  /etc/default/grub (source) → /boot/grub2/grub.cfg (output)
+    • Trigger: Must be run manually after editing /etc/default/grub
+    • Use when: You want a parameter on every kernel (e.g., adding 'quiet' back
+                after it was removed, or setting a new console parameter globally)
+    • Caveat:  On RHEL 9.2+ with BLSCFG=true, GRUB_CMDLINE_LINUX in /etc/default/grub
+               is appended to BLS entries at mkconfig time — it does NOT directly
+               overwrite the per-kernel 'options' line in the .conf file.
+
+  grubby:
+    • Scope:   PER-KERNEL — changes apply to one specific kernel's BLS entry
+    • Target:  /boot/loader/entries/<entry>.conf directly
+    • Trigger: Immediate — no grub2-mkconfig needed, change is live on next boot
+    • Use when: You want to test a parameter on one kernel without affecting others,
+                or when making kernel-specific tuning (e.g., enabling a debug option
+                only on a test kernel)
+    • Why preferred on RHEL 9+: It's the native BLS-aware tool. Red Hat documentation
+                and the RHEL 9 System Administrator's Guide recommend grubby for
+                runtime kernel argument management precisely because it understands
+                the BLS format without needing a full grub.cfg rebuild.
+
+  Summary table:
+    Tool             Edits                      Scope        Needs mkconfig?
+    ─────────────    ────────────────────────   ──────────   ───────────────
+    grub2-mkconfig   /etc/default/grub source   All kernels  Yes (it IS mkconfig)
+    grubby           BLS .conf file directly    One kernel   No
+
 GRUB_ENABLE_BLSCFG=true (RHEL 9.2+):
-  Kernel-specific cmdline now lives in /boot/loader/entries/*.conf.
-  You can edit the BLS entry directly for a one-kernel change, or edit
-  /etc/default/grub for a change that applies to all kernels going forward.
+  When this is set, the authoritative per-kernel cmdline lives in the BLS .conf,
+  not in grub.cfg. grub2-mkconfig reads the BLS entries and folds them into
+  grub.cfg — so grub.cfg becomes a derived artifact, not the source of truth
+  for per-kernel arguments.
 
 
 COMMON MISTAKES & TROUBLESHOOTING
@@ -442,9 +584,13 @@ Mistake 1: Editing /etc/default/grub but not running grub2-mkconfig
 
 Mistake 2: Hand-editing /boot/grub2/grub.cfg directly
   Result: Changes work once but get overwritten on next kernel update
-  Fix: Always edit source files (/etc/default/grub or BLS entries)
+  Fix: Always edit source files (/etc/default/grub, BLS entries, or use grubby)
 
-Mistake 3: Wrong output path for UEFI systems
+Mistake 3: Using grub2-mkconfig when you only need a one-kernel change
+  Result: Works, but heavier than necessary; risks affecting all kernels
+  Fix: Use grubby --update-kernel for targeted, single-kernel changes
+
+Mistake 4: Wrong output path for UEFI systems
   Result: grub2-mkconfig writes to wrong location
   Fix: Check 'ls /boot/efi/EFI/redhat/' — UEFI systems may need:
        grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg
@@ -453,10 +599,11 @@ Mistake 3: Wrong output path for UEFI systems
 EXAM TIPS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. Always run grub2-mkconfig after editing /etc/default/grub — this is tested
-2. Know both paths: /boot/grub2/grub.cfg (BIOS) and /boot/efi/EFI/redhat/grub.cfg (UEFI)
-3. Runtime (temporary) changes: press 'e' at GRUB menu, edit 'linux' line, Ctrl+X to boot
-4. Persistent changes: /etc/default/grub → grub2-mkconfig → grub.cfg
+1. Know BOTH workflows — the exam may ask for either grubby or grub2-mkconfig
+2. grubby is faster for single-kernel changes; grub2-mkconfig for global changes
+3. Know both grub.cfg paths: /boot/grub2/grub.cfg (BIOS) and /boot/efi/EFI/redhat/grub.cfg (UEFI)
+4. Runtime (temporary) changes: press 'e' at GRUB menu, edit 'linux' line, Ctrl+X to boot
+5. Verify grubby changes with: grubby --info=$(grubby --default-kernel)
 
 EOF
 }
@@ -466,6 +613,9 @@ EOF
 #############################################################################
 cleanup_lab() {
     echo "Cleaning up lab environment..."
+
+    # Remove grubby_lab_test from BLS entries if present
+    grubby --update-kernel=$(grubby --default-kernel) --remove-args='grubby_lab_test' 2>/dev/null || true
 
     # Restore original grub defaults
     if [ -f /etc/default/grub.lab-backup ]; then
@@ -480,6 +630,8 @@ cleanup_lab() {
         grub2-mkconfig -o /boot/grub2/grub.cfg 2>/dev/null || true
         echo "  ✓ Removed quiet_lab_test from /etc/default/grub"
     fi
+
+    echo "  ✓ Removed grubby_lab_test from BLS entry (if present)"
 }
 
 main "$@"
