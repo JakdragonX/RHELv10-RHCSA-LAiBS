@@ -1,5 +1,5 @@
 #!/bin/bash
-# labs/23C-scripting-capstone.sh
+# labs/23B-scripting-capstone.sh
 # Lab: Scripting Capstone — Build a Complete User Provisioning Tool
 # Difficulty: Advanced
 # RHCSA Objective: Create simple shell scripts; use variables, loops, and conditionals
